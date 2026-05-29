@@ -1,0 +1,226 @@
+{
+  "info": {
+    "_postman_id": "97c216e0-d519-489e-882d-95737279ccff",
+    "name": "RLOps E2E - Cologne3",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-Internal-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKeyOps}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "A. Health & Runtime",
+      "item": [
+        {
+          "name": "A.1 Health Runtime",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlRuntime}}/health"
+          }
+        },
+        {
+          "name": "A.2 Health Ops",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlOps}}/health"
+          }
+        },
+        {
+          "name": "A.3 Runtime Ready",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlRuntime}}/ready"
+          }
+        },
+        {
+          "name": "A.4 List Active Areas",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlRuntime}}/api/algorithm/ai/areas"
+          }
+        },
+        {
+          "name": "A.5 Auto-sync Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlOps}}/ops/auto-sync/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "B. Register Area For Cologne3",
+      "item": [
+        {
+          "name": "B.1 Upsert area 1 -> cologne3",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrlOps}}/internal/sync/areas/{{areaId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceEventId\": \"evt-area-1-cologne3-001\",\n  \"areaName\": \"Cologne3 Demo Area\",\n  \"isActive\": true,\n  \"controllerVisible\": true,\n  \"tenantId\": \"{{tenantId}}\",\n  \"networkId\": \"{{networkId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "B.2 Upsert legacy artifact for readiness",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrlOps}}/internal/sync/areas/{{areaId}}/artifacts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceEventId\": \"evt-artifact-1-cologne3-001\",\n  \"policyVersion\": \"v2026.05.15\",\n  \"configVersion\": \"v2026.05.15\",\n  \"activate\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "B.3 Verify area readiness",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlRuntime}}/api/algorithm/ai/areas/{{areaId}}/readiness"
+          }
+        }
+      ]
+    },
+    {
+      "name": "C. Bundle Lifecycle",
+      "item": [
+        {
+          "name": "C.1 Scan MinIO now",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrlOps}}/ops/auto-sync/scan-now"
+          }
+        },
+        {
+          "name": "C.2 Read active Cologne3 bundle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Active bundle exists\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.bundle_id) pm.environment.set(\"bundleId\", json.bundle_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlOps}}/ops/networks/{{networkId}}/active"
+          }
+        },
+        {
+          "name": "C.3 List bundles for Cologne3",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlOps}}/ops/bundles?tenantId={{tenantId}}&networkId={{networkId}}"
+          }
+        },
+        {
+          "name": "C.4 Bundle audit events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlOps}}/ops/bundles/{{bundleId}}/events"
+          }
+        }
+      ]
+    },
+    {
+      "name": "D. Inference",
+      "item": [
+        {
+          "name": "D.1 Inference - Cologne3 5 controlled crosses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test(\"5 intersections\", () => pm.expect(json.numIntersections).to.eql(5));",
+                  "pm.test(\"Has outputs\", () => pm.expect(json.algorithmOutputs.length).to.eql(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrlRuntime}}/api/algorithm/ai",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"crosses\": [\n    {\n      \"id\": 567005,\n      \"areaId\": 1,\n      \"x\": 6.9495,\n      \"y\": 50.942,\n      \"cycle\": {\n        \"id\": 700005,\n        \"createdDate\": \"2026-05-15T08:30:00+07:00\",\n        \"crossName\": \"Aachener_W - Cluster\",\n        \"cycleLength\": 114\n      },\n      \"stages\": [\n        {\n          \"id\": 800012,\n          \"stageCode\": \"P0\",\n          \"oldId\": \"p0\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 53\n        },\n        {\n          \"id\": 800013,\n          \"stageCode\": \"P1\",\n          \"oldId\": \"p1\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 14\n        },\n        {\n          \"id\": 800014,\n          \"stageCode\": \"P2\",\n          \"oldId\": \"p2\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 33\n        },\n        {\n          \"id\": 800015,\n          \"stageCode\": \"P3\",\n          \"oldId\": \"p3\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 14\n        }\n      ],\n      \"roads\": [\n        {\n          \"id\": 100015,\n          \"direction\": 1,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 28.0,\n          \"occupancySpace\": 42.0\n        },\n        {\n          \"id\": 100016,\n          \"direction\": 2,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 22.0,\n          \"occupancySpace\": 55.0,\n          \"toCrossId\": 567004\n        },\n        {\n          \"id\": 100017,\n          \"direction\": 3,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 30.0,\n          \"occupancySpace\": 38.0\n        },\n        {\n          \"id\": 100018,\n          \"direction\": 4,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 26.0,\n          \"occupancySpace\": 45.0\n        }\n      ]\n    },\n    {\n      \"id\": 567004,\n      \"areaId\": 1,\n      \"x\": 6.951,\n      \"y\": 50.942,\n      \"cycle\": {\n        \"id\": 700004,\n        \"createdDate\": \"2026-05-15T08:30:00+07:00\",\n        \"crossName\": \"Aachener_Mid - 360088\",\n        \"cycleLength\": 90\n      },\n      \"stages\": [\n        {\n          \"id\": 800010,\n          \"stageCode\": \"P0\",\n          \"oldId\": \"p0\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 45\n        },\n        {\n          \"id\": 800011,\n          \"stageCode\": \"P2\",\n          \"oldId\": \"p2\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 45\n        }\n      ],\n      \"roads\": [\n        {\n          \"id\": 100011,\n          \"direction\": 1,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 32.0,\n          \"occupancySpace\": 30.0\n        },\n        {\n          \"id\": 100012,\n          \"direction\": 2,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 20.0,\n          \"occupancySpace\": 62.0,\n          \"toCrossId\": 567001\n        },\n        {\n          \"id\": 100013,\n          \"direction\": 3,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 33.0,\n          \"occupancySpace\": 28.0\n        },\n        {\n          \"id\": 100014,\n          \"direction\": 4,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 21.0,\n          \"occupancySpace\": 58.0,\n          \"toCrossId\": 567005\n        }\n      ]\n    },\n    {\n      \"id\": 567001,\n      \"areaId\": 1,\n      \"x\": 6.9525,\n      \"y\": 50.942,\n      \"cycle\": {\n        \"id\": 700001,\n        \"createdDate\": \"2026-05-15T08:30:00+07:00\",\n        \"crossName\": \"Aachener_E - 33202549\",\n        \"cycleLength\": 90\n      },\n      \"stages\": [\n        {\n          \"id\": 800001,\n          \"stageCode\": \"P0\",\n          \"oldId\": \"p0\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 45\n        },\n        {\n          \"id\": 800002,\n          \"stageCode\": \"P2\",\n          \"oldId\": \"p2\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 45\n        }\n      ],\n      \"roads\": [\n        {\n          \"id\": 100001,\n          \"direction\": 1,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 28.0,\n          \"occupancySpace\": 40.0\n        },\n        {\n          \"id\": 100002,\n          \"direction\": 2,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 25.0,\n          \"occupancySpace\": 50.0\n        },\n        {\n          \"id\": 100003,\n          \"direction\": 4,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 23.0,\n          \"occupancySpace\": 53.0,\n          \"toCrossId\": 567004\n        }\n      ]\n    },\n    {\n      \"id\": 567002,\n      \"areaId\": 1,\n      \"x\": 6.954,\n      \"y\": 50.94,\n      \"cycle\": {\n        \"id\": 700002,\n        \"createdDate\": \"2026-05-15T08:30:00+07:00\",\n        \"crossName\": \"Side_S - 360082\",\n        \"cycleLength\": 89\n      },\n      \"stages\": [\n        {\n          \"id\": 800003,\n          \"stageCode\": \"P0\",\n          \"oldId\": \"p0\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 38\n        },\n        {\n          \"id\": 800004,\n          \"stageCode\": \"P1\",\n          \"oldId\": \"p1\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 14\n        },\n        {\n          \"id\": 800005,\n          \"stageCode\": \"P2\",\n          \"oldId\": \"p2\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 37\n        }\n      ],\n      \"roads\": [\n        {\n          \"id\": 100004,\n          \"direction\": 2,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 30.0,\n          \"occupancySpace\": 35.0\n        },\n        {\n          \"id\": 100005,\n          \"direction\": 3,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 28.0,\n          \"occupancySpace\": 38.0\n        },\n        {\n          \"id\": 100006,\n          \"direction\": 4,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 26.0,\n          \"occupancySpace\": 42.0\n        }\n      ]\n    },\n    {\n      \"id\": 567003,\n      \"areaId\": 1,\n      \"x\": 6.952,\n      \"y\": 50.944,\n      \"cycle\": {\n        \"id\": 700003,\n        \"createdDate\": \"2026-05-15T08:30:00+07:00\",\n        \"crossName\": \"Side_N - 360086\",\n        \"cycleLength\": 94\n      },\n      \"stages\": [\n        {\n          \"id\": 800006,\n          \"stageCode\": \"P0\",\n          \"oldId\": \"p0\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 33\n        },\n        {\n          \"id\": 800007,\n          \"stageCode\": \"P1\",\n          \"oldId\": \"p1\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 14\n        },\n        {\n          \"id\": 800008,\n          \"stageCode\": \"P2\",\n          \"oldId\": \"p2\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 33\n        },\n        {\n          \"id\": 800009,\n          \"stageCode\": \"P3\",\n          \"oldId\": \"p3\",\n          \"yellow\": 3,\n          \"redClear\": 1,\n          \"duration\": 14\n        }\n      ],\n      \"roads\": [\n        {\n          \"id\": 100007,\n          \"direction\": 1,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 35.0,\n          \"occupancySpace\": 22.0\n        },\n        {\n          \"id\": 100008,\n          \"direction\": 2,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 32.0,\n          \"occupancySpace\": 28.0\n        },\n        {\n          \"id\": 100009,\n          \"direction\": 3,\n          \"saturationFlow\": 1800,\n          \"averageSpeed\": 33.0,\n          \"occupancySpace\": 25.0\n        },\n        {\n          \"id\": 100010,\n          \"direction\": 4,\n          \"saturationFlow\": 3600,\n          \"averageSpeed\": 30.0,\n          \"occupancySpace\": 32.0\n        }\n      ]\n    }\n  ],\n  \"yellowTime\": 3,\n  \"minGreen\": 10,\n  \"maxGreen\": 60,\n  \"greenTimeStep\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "D.2 Runtime drift snapshot",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrlRuntime}}/internal/runtime/drift"
+          }
+        },
+        {
+          "name": "D.3 Clear runtime cache",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrlRuntime}}/api/algorithm/ai/cache/clear?area_id={{areaId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.whl
+.Python
+
+# === Virtual environments ===
+.venv/
+venv/
+ENV/
+.env/
+.env.*
+
+# === Build / packaging ===
+build/
+dist/
+.eggs/
+
+# === Test / coverage ===
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.cache/
+
+# === IDE ===
+.vscode/
+.idea/
+*.iml
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+
+# === Data / outputs (project-specific) ===
+**/results*/
+**/ket_qua/
+**/tmp/
+**/outputs/
+**/artifacts/
+**/checkpoints/
+**/runs/
+**/mlruns/
+**/mlflow_data/
+**/model_storage*/
+
+# === Docker / runtime ===
+**/prometheus_data*/
+**/grafana_data*/
+**/loki_data*/
+**/mysql_data*/
+**/minio_data*/
+**/secrets/
+
+# === Jupyter ===
+.ipynb_checkpoints/
+
+# === Node / frontend (if any) ===
+node_modules/
+
+# === Local config overrides ===
+*.local
+*.override
+
+Service-ai
+

@@ -1,0 +1,52 @@
+[project]
+name = "ai-algorithm-service"
+version = "2.0.0"
+description = "AI Algorithm Service for traffic signal optimization (ONNX inference, area-scoped policies)"
+authors = [
+    { name = "Bui Chi Toan" },
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.111.0",
+    "uvicorn==0.30.1",
+    "pydantic==2.8.2",
+    "pydantic-settings==2.4.0",
+    "minio>=7.2.0",
+    "onnxruntime>=1.17.0",
+    "numpy>=1.24.0",
+    "sqlalchemy>=2.0.30",
+    "pymysql>=1.1.0",
+    "httpx>=0.27.0",
+    "prometheus-client>=0.20.0",
+    # Shared feature preprocessing — phải cài qua editable install từ thư mục
+    # cha: `pip install -e ../traffic_rl_features`. Bump major version → bundle
+    # cũ bị reject ở extractor.
+    "traffic-rl-features>=1.0,<2.0",
+    # Bundle tooling — dùng cho ops composer (Sim Bundle -> Runtime Bundle).
+    "traffic-rl-bundle-tooling>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.2.2",
+]
+# MLflow tracking + registry. Optional (~200MB) — install when ai-ops
+# pushes bundles to Model Registry.
+mlflow = [
+    "mlflow>=2.13.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# Resolve `traffic-rl-features` từ sibling directory (cùng workspace).
+# Khi build Docker, context phải là parent dir; Dockerfile copy traffic_rl_features
+# vào /app/traffic_rl_features tương đối với ai-algorithm-service.
+[tool.uv.sources]
+traffic-rl-features = { path = "../traffic_rl_features", editable = true }
+traffic-rl-bundle-tooling = { path = "../bundle-tooling", editable = true }

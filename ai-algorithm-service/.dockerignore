@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv
+venv/
+ENV/
+.vscode/
+.idea/
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose*.yml
+*.log
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Large local artifacts not needed for API image
+*.sql
+*.db
+db/
+tests/
+build/
+dist/
+__pycache__/

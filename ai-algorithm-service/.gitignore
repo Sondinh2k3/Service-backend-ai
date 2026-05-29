@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.env
+.envrc
+.venv
+venv/
+ENV/
+.vscode/
+.idea/
+uv.lock
+poetry.lock
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Trained model weights (large files, mount via volume)
+models/*.pt
+models/*.pkl
+models/*.onnx
+!models/.gitkeep
+
+# Local dev SQLite DB
+*.db
+ai_service.db
+
+# Large SQL data dumps (mount via volume in docker-compose)
+*.sql.dump
+traffic_flow_*.sql

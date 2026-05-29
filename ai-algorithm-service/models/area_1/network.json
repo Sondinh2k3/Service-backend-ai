@@ -1,0 +1,10 @@
+{
+  "area_id": 1,
+  "cross_ids": [
+    1
+  ],
+  "neighbors": {
+    "1": []
+  },
+  "max_neighbors": 4
+}

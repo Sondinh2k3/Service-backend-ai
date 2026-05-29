@@ -1,0 +1,65 @@
+{
+  "crosses": [
+    {
+      "id": 1,
+      "areaId": 1,
+      "cycle": {
+        "id": 1,
+        "createdDate": "2026-04-24T12:00:00Z",
+        "cycleLength": 90
+      },
+      "stages": [
+        {
+          "id": 1,
+          "stageCode": "Phase 0",
+          "oldId": "p0",
+          "yellow": 3,
+          "redClear": 1,
+          "duration": 52
+        },
+        {
+          "id": 2,
+          "stageCode": "Phase 2",
+          "oldId": "p2",
+          "yellow": 3,
+          "redClear": 1,
+          "duration": 32
+        }
+      ],
+      "roads": [
+        {
+          "id": 1,
+          "direction": 1,
+          "saturationFlow": 5400,
+          "averageSpeed": 27.78,
+          "occupancySpace": 15.0
+        },
+        {
+          "id": 2,
+          "direction": 2,
+          "saturationFlow": 1200,
+          "averageSpeed": 13.89,
+          "occupancySpace": 10.0
+        },
+        {
+          "id": 3,
+          "direction": 3,
+          "saturationFlow": 5400,
+          "averageSpeed": 27.78,
+          "occupancySpace": 15.0
+        },
+        {
+          "id": 4,
+          "direction": 4,
+          "saturationFlow": 1200,
+          "averageSpeed": 13.89,
+          "occupancySpace": 10.0
+        }
+      ]
+    }
+  ],
+  "yellowTime": 3,
+  "minGreen": 15,
+  "maxGreen": 120,
+  "greenTimeStep": 5
+}

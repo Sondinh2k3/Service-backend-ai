@@ -1,0 +1,289 @@
+services:
+  # ============================================================
+  # Lop 4: DB & Storage
+  # ============================================================
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_traffic
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb_flush_log_at_trx_commit=2
+      - --sync_binlog=0
+      - --innodb_doublewrite=0
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: statistic
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init/00_create_schema.sql:/docker-entrypoint-initdb.d/00_create_schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    profiles: ["db"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio_storage
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      TZ: UTC
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -fsS http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    profiles: ["storage", "app"]
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+        required: false
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BUCKET: ai-models
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      /usr/bin/mc mb -p local/$$MINIO_BUCKET || true;
+      /usr/bin/mc anonymous set none local/$$MINIO_BUCKET || true;
+      "
+    profiles: ["storage", "app"]
+    restart: "no"
+
+  # ============================================================
+  # Lop 2 — AI Microservice (tach ai-runtime + ai-ops)
+  # ============================================================
+  ai-runtime:
+    build:
+      context: ..
+      dockerfile: ai-algorithm-service/Dockerfile
+    container_name: ai_runtime
+    command:
+      - "uv"
+      - "run"
+      - "uvicorn"
+      - "src.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    ports:
+      - "8001:8000"
+    volumes:
+      - model_storage:/app/models
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      MODEL_DIR: /app/models
+      SERVICE_ROLE: runtime
+      AI_STRICT_MODE: "false"
+      BUNDLE_LAYOUT_ENABLED: "true"
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: ai-models
+      MINIO_SECURE: "false"
+      MINIO_PREFIX: models
+      MINIO_UPLOAD_ON_SYNC: "false"
+      INTERNAL_API_KEY: "sondinh2k3"
+      DATABASE_URL: mysql+pymysql://root:123456@mysql:3306/statistic
+      MINIO_AUTO_SYNC_ENABLED: "true"
+      MINIO_AUTO_SYNC_PREFIX: "sim/default/"
+      MINIO_AUTO_SYNC_SUFFIX: ".sim.zip"
+      MINIO_AUTO_SYNC_AUTO_ACTIVATE: "true"
+      MINIO_AUTO_SYNC_POLL_INTERVAL_SECONDS: "600"
+      SIM_BUNDLE_AUTO_COMPOSE_ENABLED: "true"
+      SIM_BUNDLE_PREFIX: "sim/default/"
+      SIM_BUNDLE_SUFFIX: ".sim.zip"
+      SIM_BUNDLE_AUTO_ACTIVATE: "true"
+      SIM_BUNDLE_UPLOAD_RUNTIME: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_started
+        required: false
+    profiles: ["app"]
+    restart: always
+
+  ai-ops:
+    build:
+      context: ..
+      dockerfile: ai-algorithm-service/Dockerfile
+    container_name: ai_ops
+    command:
+      - "uv"
+      - "run"
+      - "uvicorn"
+      - "src.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8002"
+    ports:
+      - "8002:8002"
+    volumes:
+      - model_storage:/app/models
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      MODEL_DIR: /app/models
+      SERVICE_ROLE: ops
+      BUNDLE_LAYOUT_ENABLED: "true"
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: ai-models
+      MINIO_SECURE: "false"
+      MINIO_PREFIX: models
+      ARTIFACT_BUNDLE_PREFIX: bundles
+      INTERNAL_API_KEY: "sondinh2k3"
+      DATABASE_URL: mysql+pymysql://root:123456@mysql:3306/statistic
+      RUNTIME_INTERNAL_URL: http://ai-runtime:8000
+      MLFLOW_ENABLED: "false"
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MINIO_AUTO_SYNC_ENABLED: "true"
+      MINIO_AUTO_SYNC_PREFIX: "sim/default/"
+      MINIO_AUTO_SYNC_SUFFIX: ".sim.zip"
+      MINIO_AUTO_SYNC_AUTO_ACTIVATE: "true"
+      MINIO_AUTO_SYNC_POLL_INTERVAL_SECONDS: "600"
+      SIM_BUNDLE_AUTO_COMPOSE_ENABLED: "true"
+      SIM_BUNDLE_PREFIX: "sim/default/"
+      SIM_BUNDLE_SUFFIX: ".sim.zip"
+      SIM_BUNDLE_AUTO_ACTIVATE: "true"
+      SIM_BUNDLE_UPLOAD_RUNTIME: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_started
+        required: false
+      ai-runtime:
+        condition: service_started
+        required: false
+    profiles: ["app"]
+    restart: always
+
+  # ============================================================
+  # Lop 3 — MLflow Tracking + Registry
+  # ============================================================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    container_name: mlflow_server
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root s3://ai-models/mlflow
+      --host 0.0.0.0
+      --port 5000
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    depends_on:
+      minio:
+        condition: service_started
+        required: false
+    profiles: ["mlflow"]
+    restart: unless-stopped
+
+  # ============================================================
+  # Lop 4 — Observability: Prometheus + Grafana + Loki
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    profiles: ["observability"]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    profiles: ["observability"]
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./observability/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      loki:
+        condition: service_started
+        required: false
+    profiles: ["observability"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+        required: false
+      loki:
+        condition: service_started
+        required: false
+    profiles: ["observability"]
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  minio_data:
+  model_storage:
+  mlflow_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:

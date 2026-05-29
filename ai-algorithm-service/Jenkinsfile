@@ -1,0 +1,136 @@
+// CI/CD pipeline cho ai-algorithm-service.
+//
+// Pipeline phan ranh ro:
+//   - Team training (repo Service-ai): build SIM BUNDLE (.sim.zip) tu training
+//     outputs bang `Service-ai/scripts/build_sim_bundle.py` va upload len MinIO.
+//   - Service ai-ops (repo nay): nhan sim bundle qua MinIO listener, ket hop
+//     real_network_snapshot da co trong DB, compose ra RUNTIME BUNDLE va
+//     activate. KHONG build sim bundle nua — viec do thuoc training repo.
+//
+// Stages:
+//   - Checkout
+//   - Lint (ruff + mypy, allow failure neu chua cau hinh)
+//   - Test (pytest voi extra dev)
+//   - Build Image (Docker)
+//   - Push Image (chi tren branch main, can creds 'docker-registry')
+//
+// Credentials Jenkins can cau hinh truoc:
+//   - docker-registry      (username/password) — optional
+//
+// Pipeline parameters: (giu lai cho tuong thich, hien khong dung trong stages)
+//   - OPS_API_URL          (string) URL ai-ops
+//   - MINIO_ENDPOINT       (string) MinIO endpoint
+//   - MINIO_SIM_BUCKET     (string) bucket chua sim bundle
+//   - MINIO_SIM_PREFIX     (string) prefix sim
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'OPS_API_URL', defaultValue: '', description: 'ai-ops base URL (de trong de skip notify)')
+        string(name: 'MINIO_ENDPOINT', defaultValue: '', description: 'MinIO endpoint (de trong de skip push)')
+        string(name: 'MINIO_SIM_BUCKET', defaultValue: 'ai-models', description: 'Bucket chua sim bundle')
+        string(name: 'MINIO_SIM_PREFIX', defaultValue: 'sim/', description: 'Prefix sim bundle, phai khac prefix runtime')
+        string(name: 'TENANT_ID', defaultValue: 'default')
+        string(name: 'NETWORK_ID', defaultValue: 'area_1')
+        string(name: 'POLICY_VERSION', defaultValue: '', description: 'Phien ban sim bundle, vd v2026.05.15. De trong dung BUILD_NUMBER.')
+    }
+
+    environment {
+        IMAGE_NAME = "ai-algorithm-service"
+        REGISTRY = ""  // overide bang withCredentials neu can
+        SHORT_SHA = "${env.GIT_COMMIT?.take(7) ?: 'local'}"
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        ansiColor('xterm')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git rev-parse HEAD'
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                script {
+                    // Allow lint to fail without breaking pipeline (chua cau hinh tools).
+                    sh '''
+                        if command -v uv >/dev/null 2>&1; then
+                            uv run --extra dev ruff check src/ || echo "[lint] ruff skipped/failed"
+                        else
+                            echo "[lint] uv not available — skipping"
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    docker build -t ${IMAGE_NAME}:test --target builder .
+                    docker run --rm \
+                        -v ${WORKSPACE}/tests:/app/tests:ro \
+                        ${IMAGE_NAME}:test \
+                        uv run --extra dev pytest tests/ -v --maxfail=1 --disable-warnings
+                '''
+            }
+            post {
+                always {
+                    // Don't fail if no test results yet.
+                    junit allowEmptyResults: true, testResults: '**/test-results.xml'
+                }
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                sh 'docker build -t ${IMAGE_NAME}:${SHORT_SHA} -t ${IMAGE_NAME}:latest .'
+            }
+        }
+
+        stage('Push Image') {
+            when {
+                allOf {
+                    branch 'main'
+                    expression { return env.REGISTRY?.trim() }
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-registry',
+                    usernameVariable: 'REG_USER',
+                    passwordVariable: 'REG_PASS'
+                )]) {
+                    sh '''
+                        echo $REG_PASS | docker login $REGISTRY -u $REG_USER --password-stdin
+                        docker tag ${IMAGE_NAME}:${SHORT_SHA} ${REGISTRY}/${IMAGE_NAME}:${SHORT_SHA}
+                        docker tag ${IMAGE_NAME}:${SHORT_SHA} ${REGISTRY}/${IMAGE_NAME}:latest
+                        docker push ${REGISTRY}/${IMAGE_NAME}:${SHORT_SHA}
+                        docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
+    }
+
+    post {
+        always {
+            sh 'docker image prune -f --filter "label=stage=builder" || true'
+        }
+        failure {
+            echo "Pipeline failed for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+            // TODO: slackSend / emailext khi co cau hinh.
+        }
+        success {
+            echo "Pipeline succeeded — image=${IMAGE_NAME}:${SHORT_SHA}"
+        }
+    }
+}

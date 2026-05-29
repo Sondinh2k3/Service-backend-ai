@@ -1,0 +1,19 @@
+{
+  "use_local_gnn": true,
+  "obs_dim": 336,
+  "base_obs_dim": 56,
+  "window_size": 6,
+  "max_neighbors": 4,
+  "num_standard_phases": 8,
+  "num_actions_per_phase": 5,
+  "keep_action_index": 2,
+  "input_names": [
+    "self_features",
+    "neighbor_features",
+    "neighbor_mask",
+    "neighbor_directions",
+    "action_mask"
+  ],
+  "output_name": "logits",
+  "checkpoint": "E:\\SUMO\\test1\\RL_algo_for_ITS-master\\results_mgmq\\mgmq_ppo_osm_20260418_171511\\MGMQPPO_sumo_mgmq_v0_8431f_00000_0_2026-04-18_17-15-25\\checkpoint_000044"
+}

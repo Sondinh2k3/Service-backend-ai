@@ -11,7 +11,7 @@
 | 1 | Core Controller (Edge) | Phần mềm khách hàng | ❌ Out-of-scope |
 | **2** | **AI Microservice** | **Edge Server** | ✅ **Toàn bộ** |
 | 3 | Cloud (Data + CI/CD + Registry) | Vendor cloud (repo `Service-ai` build sim bundle) | ⚠️ Runtime composer + MLflow hooks |
-| **4** | **Observability** | Cross-layer | ✅ **Prometheus + Grafana + Loki + Drift** |
+| **4** | **Observability** | Cross-layer | ✅ **Prometheus + Grafana + ELK + Drift** |
 
 ## 2. Lớp 2 — AI Microservice (chi tiết)
 
@@ -188,7 +188,7 @@ Implementing per spec mục VI.
 | VI.2 Drift wired vào AIService | `record_observation` mỗi inference | [src/services/ai_service.py](../src/services/ai_service.py#L226) |
 | VI.2 Drift trigger retraining | ❌ Deferred (cần Lớp 3 retraining) | — |
 | VI.3 Time Series DB | Prometheus | [observability/prometheus.yml](../observability/prometheus.yml) |
-| VI.3 Log Storage | Loki + Promtail | [observability/promtail.yml](../observability/promtail.yml) |
+| VI.3 Log Storage | Elasticsearch + Logstash + Kibana | [observability/logstash/pipeline.conf](../observability/logstash/pipeline.conf) |
 
 ## 5. Defense in Depth (spec mục VIII)
 
@@ -251,7 +251,7 @@ Các bảng chính (xem [src/db/models.py](../src/db/models.py)):
 
 ## 9. Tham khảo thêm
 
-- [demo-quickstart.md](demo-quickstart.md) — chạy thử kiến trúc trên
+- [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — demo nhanh
 - [auto-sync.md](auto-sync.md) — chi tiết cơ chế auto-deploy
 - [api-reference.md](api-reference.md) — endpoints
 - [../kientrucRLOps.pdf](../kientrucRLOps.pdf) — spec gốc 4 lớp

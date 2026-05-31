@@ -3,7 +3,7 @@ name = "ai-algorithm-service"
 version = "2.0.0"
 description = "AI Algorithm Service for traffic signal optimization (ONNX inference, area-scoped policies)"
 authors = [
-    { name = "Bui Chi Toan" },
+    { name = "Sondinh2k3" },
 ]
 readme = "README.md"
 requires-python = ">=3.11"

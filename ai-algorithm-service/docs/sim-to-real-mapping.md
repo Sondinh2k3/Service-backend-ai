@@ -1,6 +1,6 @@
 # Sim → Real Mapping
 
-Tài liệu này giải thích mapping giữa ID phía SUMO và ID phía DB thật trong pipeline hiện tại. Luồng chạy chi tiết nằm ở [sim-to-real-pipeline.md](sim-to-real-pipeline.md) và [end-to-end-test.md](end-to-end-test.md).
+Tài liệu này giải thích mapping giữa ID phía SUMO và ID phía DB thật trong pipeline hiện tại. Luồng chạy chi tiết nằm ở [end-to-end-test.md](end-to-end-test.md) và [PIPELINE.md](PIPELINE.md).
 
 ---
 

@@ -317,6 +317,6 @@ Common causes:
 
 ## 9. Bước tiếp theo
 
-- [demo-quickstart.md](demo-quickstart.md#5-upload-bundle--service-tự-deploy) — demo auto-sync
+- [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — demo auto-sync
 - [deployment.md](deployment.md) — context production vendor cloud + customer edge
 - [troubleshooting.md](troubleshooting.md) — debug common issues

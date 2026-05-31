@@ -8,6 +8,7 @@
 
 | § | Nội dung | Thời gian |
 |---|---|---|
+| 0.1 | Quick demo (10 phut, skip race-condition/rollback) | 8-10 phut |
 | 1 | Pre-requisites & cấu trúc workspace | 2 phút |
 | 2 | Start Docker stack | 2 phút |
 | 3 | Import Postman | 1 phút |
@@ -34,8 +35,57 @@ Cấu hình demo:
 
 ---
 
-## 1. Pre-requisites & cấu trúc workspace
+## 0.1 Quick demo (10 phut, skip race-condition/rollback)
 
+Luồng rút gọn cho demo nhanh. Chi tiet tung buoc xem cac section 2, 4, 5, 6, 7 ben duoi.
+
+```bash
+cd ai-algorithm-service
+uv lock
+uv sync --extra dev
+uv pip install -e ../traffic_rl_features -e ../bundle-tooling
+
+docker compose --profile db --profile storage --profile app up -d --build
+
+python scripts/register_demo_real_network_snapshot.py \
+  --service-area-id 1 \
+  --tenant-id default \
+  --network-id cologne3 \
+  --ops-url http://localhost:8002 \
+  --api-key sondinh2k3
+
+cd ../Service-ai
+mkdir -p dist
+python scripts/build_sim_bundle.py \
+  --tenant-id default \
+  --network-id cologne3 \
+  --version v2026.05.15 \
+  --sim-network network/cologne3/intersection_config.json \
+  --policy-onnx tmp/onnx_eval/policy.onnx \
+  --policy-meta tmp/onnx_eval/policy_meta.json \
+  --output-zip dist/cologne3.sim.zip
+
+cd ../ai-algorithm-service
+docker run --rm --network ai-algorithm-service_default \
+  -v "$PWD/../Service-ai/dist:/data" \
+  --entrypoint /bin/sh \
+  minio/mc:latest \
+  -c "mc alias set local http://minio:9000 minioadmin minioadmin && \
+      mc cp /data/cologne3.sim.zip local/ai-models/sim/default/cologne3/cologne3.sim.zip"
+
+curl -H "X-Internal-API-Key: sondinh2k3" \
+  http://localhost:8002/ops/networks/cologne3/active
+
+curl http://localhost:8001/api/algorithm/ai/areas/1/readiness
+
+curl -X POST http://localhost:8001/api/algorithm/ai \
+  -H "Content-Type: application/json" \
+  -d @test_cologne3_payload.json | python -m json.tool
+```
+
+Neu muon test bang Postman, import 2 file o muc 3 truoc khi goi API.
+
+## 1. Pre-requisites & cấu trúc workspace
 ### 1.1 Yêu cầu
 
 - Docker Desktop 24+ (hoặc Docker Engine + Compose v2).

@@ -553,6 +553,6 @@ Trigger 1 lần scan MinIO bucket ngay (không đợi poller interval).
 
 ## 6. Tham khảo
 
-- [demo-quickstart.md](demo-quickstart.md) — chạy thử các endpoint trên
+- [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — chạy thử nhanh
 - [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md) — chi tiết `POST /api/algorithm/ai`
 - [../postman/README.md](../postman/README.md) — Postman collection sẵn dùng

@@ -477,7 +477,7 @@ ai-runtime sẽ hot-reload trong ≤ 5 s (poll active.json, TTL `ACTIVE_POINTER_
 
 ## 12. Tham chiếu liên quan
 
-- [demo-quickstart.md](demo-quickstart.md) — chạy thử nhanh 30 phút.
+- [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — demo nhanh.
 - [architecture.md](architecture.md) — kiến trúc + mapping spec PDF.
 - [deployment.md](deployment.md) — mô hình vendor cloud + customer edge.
 - [auto-sync.md](auto-sync.md) — cơ chế auto-deploy bundle từ MinIO.

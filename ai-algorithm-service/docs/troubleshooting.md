@@ -400,12 +400,19 @@ Invoke-RestMethod http://localhost:9090/api/v1/targets | ConvertTo-Json -Depth 5
 2. `/metrics` endpoint trả 200 với content `ai_inference_total ...`
 3. Datasource Prometheus URL trong Grafana = `http://prometheus:9090` (Docker network internal)
 
-### 6.2 Loki không có log
+### 6.2 ELK khong co log
 
-**Diagnose:** Promtail config [observability/promtail.yml](../observability/promtail.yml) scrape Docker container stdout. Verify:
+**Diagnose:** Logstash doc file log Docker tu `/var/lib/docker/containers/*/*.log` theo config [observability/logstash/pipeline.conf](../observability/logstash/pipeline.conf).
+
 ```powershell
-docker compose logs promtail | Select-String "added.*ai-"
+docker compose logs logstash | Select-String "ai-service-logs"
 ```
+
+Neu Kibana khong thay data:
+
+1. Verify Elasticsearch: `curl http://localhost:9200/_cluster/health`
+2. Verify index: `curl http://localhost:9200/_cat/indices?v | Select-String "ai-service-logs"`
+3. Tao Index Pattern trong Kibana: `ai-service-logs-*`
 
 ## 7. Multi-tenant / customer issues
 
@@ -460,4 +467,4 @@ CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "800
 ## 10. Bước tiếp theo
 
 - Nếu vẫn không fix được → log toàn bộ output, kèm `docker compose ps` + version, gửi cho team dev
-- [demo-quickstart.md](demo-quickstart.md) — bắt đầu lại từ đầu để xác định bước nào fail
+- [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — chạy lại demo nhanh de khoanh vung loi

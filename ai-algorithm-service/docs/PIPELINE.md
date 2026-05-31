@@ -52,6 +52,29 @@
                     └─────────────────────────────┘
 ```
 
+### 1.1 Tóm tắt nhanh (TL;DR)
+
+```text
+[Sim Training]
+  policy.onnx + policy_meta.json + sim_network.json
+        |
+        v
+  Sim Bundle (*.sim.zip) -> MinIO
+        |
+        v
+[AI Ops]
+  pull Sim Bundle
+  load real_network_snapshot tu DB noi bo service
+  compile real_normalization.json
+  generate deployment_map.json noi bo
+  validate compatibility
+  build + activate Runtime Bundle
+        |
+        v
+[AI Runtime]
+  controller payload -> inference
+```
+
 ---
 
 ## 2. Phân vai trò 2 container
@@ -671,7 +694,6 @@ A: Còn, nhưng đã đánh dấu `deprecated=True`. Log warning mỗi lần g�
 
 ## 13. Liên kết tham khảo
 
-- [docs/sim-to-real-pipeline.md](sim-to-real-pipeline.md) — bản tóm tắt refactor
 - [docs/architecture.md](architecture.md) — kiến trúc nội bộ
 - [docs/auto-sync.md](auto-sync.md) — chi tiết listener/poller
 - [docs/configuration.md](configuration.md) — env vars

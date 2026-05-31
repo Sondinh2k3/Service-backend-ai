@@ -13,15 +13,13 @@
 | **[PIPELINE.md](PIPELINE.md)** | Mô tả end-to-end pipeline (Sim Bundle → Real Snapshot → Runtime Bundle → Inference) bằng tiếng Việt, có sơ đồ, edge cases, FAQ | **Đọc đầu tiên** nếu bạn mới onboard |
 | [architecture.md](architecture.md) | Kiến trúc nội bộ + mapping với spec gốc 4 lớp PDF | Khi cần hiểu code organization |
 | [sim-to-real-mapping.md](sim-to-real-mapping.md) | Giải thích 3 không gian ID (sim / runtime standard / real DB) và cách composer map giữa chúng | Khi debug compatibility error |
-| [sim-to-real-pipeline.md](sim-to-real-pipeline.md) | Tóm tắt contract sau refactor (ngắn gọn) | Tham khảo nhanh |
+| [elk-quickstart.md](elk-quickstart.md) | Hướng dẫn chạy ELK local de xem log | Khi can xem log bang Kibana |
 
 ### Nhóm 2: HÀNH ĐỘNG — chạy demo / test
 
 | File | Mục đích | Thời gian |
 |---|---|---|
 | **[end-to-end-test.md](end-to-end-test.md)** ⭐ | **Test pipeline đầy đủ** từ đầu đến cuối, gồm: start stack, đăng ký real snapshot, build sim bundle, upload MinIO, verify active bundle, inference, **test race-condition**, rollback | ~15 phút |
-| [demo-quickstart.md](demo-quickstart.md) | Demo rút gọn nhanh hơn (skip race-condition test) | ~10 phút |
-| [deploy-docker-postman.md](deploy-docker-postman.md) | Phiên bản ngắn nhất, focus vào Docker + Postman | ~5 phút |
 | [testing.md](testing.md) | Cách chạy unit test (pytest) | — |
 
 ### Nhóm 3: TÍCH HỢP & DEPLOY
@@ -71,7 +69,7 @@
 
 ### "Tôi cần demo nhanh cho khách / sếp xem"
 
-→ [demo-quickstart.md](demo-quickstart.md) — bỏ phần race-condition + rollback, chạy ~10 phút thấy kết quả.
+→ [end-to-end-test.md](end-to-end-test.md#01-quick-demo-10-phut-skip-race-conditionrollback) — phần quick demo, chạy ~10 phút thấy kết quả.
 
 ### "Tôi đang viết Core Controller (Lớp 1) gọi AI Service"
 

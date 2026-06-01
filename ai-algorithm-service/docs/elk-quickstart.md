@@ -2,6 +2,8 @@
 
 Muc tieu: xem log cua ai-runtime/ai-ops tren Kibana khi chay local Docker Compose.
 
+Log app xuat JSON (ELK-friendly), Logstash se parse vao field `app.*`.
+
 ## 1. Start ELK stack
 
 ```bash
@@ -49,6 +51,13 @@ service : "ai-runtime"
 ```
 
 Hoac filter theo `container_id` neu `service` chua co.
+
+Neu can filter theo level hoac logger:
+
+```
+app.level : "ERROR"
+app.logger : "ai_algo_service"
+```
 
 ## 6. Check Logstash pipeline
 

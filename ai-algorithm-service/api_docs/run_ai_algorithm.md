@@ -1,133 +1,133 @@
-# Inference API — `POST /api/algorithm/ai`
+# Inference API: `POST /api/algorithm/ai`
 
-> Chi tiết schema và behavior của endpoint inference chính. Endpoint này được gọi từ Core Controller (Lớp 1) mỗi chu kỳ điều khiển đèn.
->
-> Reference toàn bộ endpoints khác: [../docs/api-reference.md](../docs/api-reference.md).
+Endpoint này là contract runtime chính giữa Core Controller và AI Service.
 
-## 1. Endpoint
+Production flow đúng là:
 
-```
-POST http://<edge-host>:8001/api/algorithm/ai
+1. Backend/Core management sync topology tĩnh qua `PUT /internal/sync/areas/{area_id}/real-network`.
+2. AI Service compile `real_normalization.json` và compose/activate runtime bundle.
+3. Core Controller gọi inference, chỉ gửi trạng thái đèn hiện tại và nhu cầu giao thông.
+
+Payload legacy gửi đầy đủ topology vẫn được hỗ trợ để tương thích, nhưng payload gọn dưới đây là chuẩn khuyến nghị cho production.
+
+## Endpoint
+
+```http
+POST /api/algorithm/ai
 Content-Type: application/json
-[X-Request-Id: <uuid>]   # optional, dùng cho trace
+X-Request-Id: <uuid-or-trace-id>
 ```
 
-**Behavior:**
-- Nhận danh sách `crosses` với trạng thái giao thông hiện tại
-- Group theo `areaId`
-- Enforce **1 area / request** khi `ENFORCE_SINGLE_AREA_PER_REQUEST=true` (default)
-- Readiness guard: mỗi area phải register + có artifact / bundle đầy đủ
-- Strict mode (`AI_STRICT_MODE=true`): không auto-gen config — thiếu file → `CONFIG_NOT_FOUND`
-- Chạy policy ONNX → Phase Normalizer → Guardrails → trả signal plan mới
-- Audit mỗi request vào `inference_audit` table (request_id, area_id, policy_version, bundle_id, latency, guardrail_triggered, status)
-- Drift detection observe `obs_mean` của observation đã z-scored
+Runtime container: `http://<ai-runtime-host>:8001`.
 
-**Service tự chọn bundle nào dùng cho area:** đọc `active.json` của network gắn với `areaId`. Vendor update model qua MinIO → service tự pickup, customer không cần làm gì (xem [../docs/auto-sync.md](../docs/auto-sync.md)).
+## Client Policy
 
-## 2. Request schema (AIInput)
+| Item | Khuyến nghị production |
+|---|---|
+| Timeout | 500 ms |
+| Retry | Tối đa 1 lần với cùng `X-Request-Id` hoặc request id có suffix retry |
+| Fallback | Fixed-time plan đã cấu hình sẵn |
+| Audit | Lưu request + response + latency + fallback reason |
+| Actuation | Chỉ push xuống TSC sau khi validate output |
 
-### 2.1 Top-level fields
-
-| Field | Type | Required | Default | Note |
-|-------|------|----------|---------|------|
-| `crosses` | `Array<Cross>` | ✓ | — | Tất cả cross phải cùng `areaId` |
-| `cycleTime` | `int` | — | `90` | Range 30..300 |
-| `yellowTime` | `int` | — | `3` | Range 1..10 |
-| `minGreen` | `int` | — | `10` | Range 5..30 |
-| `maxGreen` | `int` | — | `60` | Range 30..120 |
-| `greenTimeStep` | `int` | — | `5` | Range 1..15 |
-
-### 2.2 Cross object
-
-| Field | Type | Required | Note |
-|-------|------|----------|------|
-| `id` | `int` | ✓ | Cross ID (≥1) |
-| `areaId` | `int` | ✓ | Area ID — service tra cứu bundle qua đây |
-| `type` | `int` | ✓ | Cross type code |
-| `cycle` | `Cycle` | ✓ | Xem [2.3] |
-| `stages` | `Array<Stage>` | ✓ | Số stage hiện tại của cross |
-| `roads` | `Array<Road>` | ✓ | Đầy đủ roads của cross |
-
-### 2.3 Cycle object
+## Production Request Schema
 
 ```json
 {
-  "id": 1,
-  "createdDate": "2026-04-24T12:00:00Z",
-  "createdBy": "system",
-  "modifiedDate": "2026-04-24T12:00:00Z",
-  "modifiedBy": "system",
-  "isActive": 1,
-  "crossId": 1,
-  "numberOfStages": 2,
-  "oldId": "C_1",
-  "cycleLength": 90
-}
-```
-
-### 2.4 Stage object
-
-```json
-{
-  "id": 1,
-  "stageCode": "Phase 0",
-  "oldId": "p0",
-  "primary": 1,
-  "weight": 1.0,
-  "minGreenTime": 15,
-  "maxGreenTime": 120,
-  "yellow": 3,
-  "redClear": 1,
-  "duration": 52,
-  "movements": [
-    {"fromRoadId": 1, "toRoadId": 2, "proportion": 0.5}
+  "areaId": 1,
+  "timestamp": "2026-06-02T10:00:00+07:00",
+  "crosses": [
+    {
+      "crossId": 1001,
+      "cycleId": 10,
+      "cycleLength": 90,
+      "stages": [
+        {"stageId": 1, "greenTime": 41},
+        {"stageId": 2, "greenTime": 42}
+      ],
+      "roads": [
+        {
+          "roadId": 501,
+          "averageSpeed": 32.5,
+          "averageSpeedUnit": "km/h",
+          "occupancySpace": 45.2,
+          "queueLength": 28,
+          "totalVehicle": 120,
+          "windowSeconds": 300
+        }
+      ]
+    }
   ]
 }
 ```
 
-### 2.5 Road object
+### Top-Level
 
-```json
-{
-  "id": 1,
-  "roadName": "N2C",
-  "direction": 1,
-  "numberOfLanes": 3,
-  "flowRoad": 500,
-  "saturationFlow": 5400,
-  "averageSpeed": 6.94,
-  "averageSpeedUnit": "m/s",
-  "occupancySpace": 15.0,
-  "totalVehicle": 3,
-  "windowSeconds": 60,
-  "queueLength": 8.0,
-  "density": null,
-  "insideArea": 1,
-  "length": 142.34
-}
-```
+| Field | Type | Required | Note |
+|---|---|---:|---|
+| `areaId` | integer | recommended | Area đã sync và có active bundle. Có thể đặt trong từng cross nếu cần legacy/multi-area |
+| `timestamp` | string/null | no | Timestamp quan sát, dùng cho audit/freshness phía caller |
+| `crosses` | array | yes | Danh sách nút trong cùng area. Production nên enforce 1 area/request |
+| `yellowTime` | integer | no | Legacy/request override, default `3` |
+| `minGreen` | integer | no | Default `15` |
+| `maxGreen` | integer | no | Default `60` |
+| `greenTimeStep` | integer | no | Default `5` |
 
-**Direction codes:** runtime payload chấp nhận encoding 4-direction (`1=N, 2=E, 3=S, 4=W`) — đây là format Core Controller hiện tại đang dùng.
+### Cross
 
-> **Note**: nếu controller chuyển sang encoding 8-direction (`0=N, 2=E, 4=S, 6=W`, với `1/3/5/7` là NE/SE/SW/NW), runtime cold-start fallback ở [src/preprocessing/topology_builder.py](../src/preprocessing/topology_builder.py) hiện CHỈ chấp nhận 1..4 — cần đồng bộ thêm. Đường tin cậy hơn là để service tự suy `direction_map` qua GPS ở compile time (xem [docs/PIPELINE.md §4.6](../docs/PIPELINE.md#46-direction-inference-gps-first-legacy-fallback)) — khi đó field `direction` trong payload inference này chỉ đóng vai trò phụ.
+| Field | Type | Required | Note |
+|---|---|---:|---|
+| `crossId` hoặc `id` | integer | yes | Real cross ID đã có trong snapshot |
+| `areaId` | integer | no | Chỉ cần nếu không có top-level `areaId` |
+| `cycleId` | integer | no | Nếu bỏ, service dùng `primary_cycle_id` trong bundle |
+| `cycleLength` | integer | no | Có thể hydrate từ snapshot nếu snapshot/bundle có `cycle_length` |
+| `stages` | array | yes | Trạng thái stage hiện tại |
+| `roads` | array | yes | Nhu cầu giao thông theo road |
 
-### 2.6 Data collection contract (runtime)
+Không cần gửi `x`, `y`, `direction`, `toCrossId`, stage metadata, road static nếu đã sync topology.
 
-**Mục tiêu:** dữ liệu thực tế phải gần với distribution mô phỏng. Runtime sẽ normalize về $[0,1]$.
+### Stage
 
-**Flow + density (khuyến nghị):**
-- `flowVehPerSecond = totalVehicle / windowSeconds`
-- `averageSpeedUnit` mặc định `m/s` nếu không gửi.
-- `densityVehPerKm = (flowVehPerSecond / averageSpeedMps) * 1000`
-- Runtime tự normalize density về $[0,1]$ theo lanes + jam density.
+| Field | Type | Required | Note |
+|---|---|---:|---|
+| `stageId` hoặc `id` | integer | yes | Real stage ID thuộc cycle/cross đã sync |
+| `greenTime` | integer | recommended | Green hiện tại. Service cộng `yellow + redClear` từ snapshot để ra duration nội bộ |
+| `duration` | integer | optional | Stage duration hiện tại = `green + yellow + redClear`. Nếu có thì service dùng trực tiếp |
+| `yellow` | integer | no | Legacy/override. Production hydrate từ snapshot |
+| `redClear` | integer | no | Legacy/override. Production hydrate từ snapshot |
+| `stageCode`, `oldId` | string | no | Hydrate từ snapshot nếu có |
 
-**Occupancy + speed:**
-- `occupancySpace`: % (0..100)
-- `averageSpeed`: theo `averageSpeedUnit` (`m/s` hoặc `km/h`)
+Nếu một nút có all-red thì snapshot/stage hoặc request phải có `redClear > 0`. Nếu không có all-red, `redClear = 0`.
 
-Nếu không có `totalVehicle/windowSeconds`, runtime sẽ **không tự suy density** và fallback theo spec trong bundle.
+### Road
 
-## 3. Response schema (AIOutput)
+| Field | Type | Required | Note |
+|---|---|---:|---|
+| `roadId` hoặc `id` | integer | yes | Real road ID đã có trong snapshot |
+| `averageSpeed` | number | yes | Tốc độ trung bình |
+| `averageSpeedUnit` | string | strongly recommended | `m/s` hoặc `km/h`. Nếu bỏ, service mặc định `m/s` |
+| `occupancySpace` | number | yes | Occupancy 0-100 hoặc 0-1 |
+| `queueLength` | number/null | recommended | Mét hoặc normalized 0-1 |
+| `totalVehicle` | integer/null | recommended | Số xe trong window |
+| `windowSeconds` | number/null | recommended | Độ dài window quan sát |
+| `density` | number/null | optional | Nếu có, service dùng trực tiếp; nếu không có có thể derive từ `totalVehicle/windowSeconds/speed` |
+| `saturationFlow` | number | no | Hydrate từ snapshot/bundle nếu đã sync |
+| `direction`, `toCrossId` | number/null | no | Legacy fallback; production dùng `direction_map` và `network.json` |
+
+Nếu không gửi `queueLength`, `totalVehicle`, `windowSeconds`, service vẫn chạy nhưng các channel `queue/density` sẽ fallback theo occupancy, làm nghèo tín hiệu nhu cầu giao thông.
+
+## Legacy Payload
+
+Payload cũ vẫn hợp lệ:
+
+- `crosses[].id`, `crosses[].areaId`
+- `cycle: {id, createdDate, crossName, cycleLength}`
+- `stages[]` đầy đủ `id/stageCode/oldId/yellow/redClear/duration`
+- `roads[]` có `id/direction/saturationFlow/averageSpeed/occupancySpace`
+
+Legacy phù hợp cho demo hoặc khi chưa có snapshot/bundle đầy đủ. Production nên dùng payload gọn.
+
+## Response Schema
 
 ```json
 {
@@ -136,26 +136,18 @@ Nếu không có `totalVehicle/windowSeconds`, runtime sẽ **không tự suy de
   "areaIds": [1],
   "algorithmOutputs": [
     {
-      "cycleLength": 90,
-      "crossId": 1,
+      "crossId": 1001,
       "areaId": 1,
-      "crossName": null,
-      "cycleId": 1,
-      "createdDate": "2026-04-24T12:00:00Z",
+      "crossName": "Cross 1001",
+      "cycleId": 10,
+      "cycleLength": 90,
+      "createdDate": "2026-06-02T10:00:00+07:00",
       "phases": [
         {
           "stageId": 1,
-          "stageCode": "Phase 0",
-          "oldId": "p0",
-          "greenTime": 47,
-          "yellowTime": 3,
-          "redClearTime": 1
-        },
-        {
-          "stageId": 2,
-          "stageCode": "Phase 2",
-          "oldId": "p2",
-          "greenTime": 35,
+          "stageCode": "S1",
+          "oldId": "1",
+          "greenTime": 41,
           "yellowTime": 3,
           "redClearTime": 1
         }
@@ -165,146 +157,79 @@ Nếu không có `totalVehicle/windowSeconds`, runtime sẽ **không tự suy de
 }
 ```
 
-**Đặc điểm:**
-- `phases[].greenTime` — kết quả AI sau Guardrails. Đảm bảo `min_green ≤ greenTime ≤ max_green` và tổng (`green + yellow + redClear`) ≈ `cycleLength`
-- `phases[]` align thứ tự với `crosses[].stages[]` của input
-- Stage bị mask (phase_mapping = -1) → giữ nguyên green-time như input
+## Output Validation Before TSC
 
-## 4. Errors
+Core Controller phải validate:
 
-Format chuẩn:
+- HTTP status là `200`.
+- Body parse được JSON.
+- `status == 1`.
+- Tất cả `crossId` trong request có output tương ứng.
+- Stage/cycle IDs hợp với topology hiện tại.
+- Tổng duration mỗi cycle xấp xỉ `cycleLength`:
+
+```text
+sum(phase.greenTime + phase.yellowTime + phase.redClearTime) ~= cycleLength
+```
+
+Nếu bất kỳ điều kiện nào fail: không push AI plan, dùng fixed-time fallback.
+
+## Error Contract
+
+Application errors:
+
 ```json
 {
   "errorCode": "AREA_NOT_READY",
-  "message": "Area 1 chua san sang: missing=['policy.onnx'].",
-  "path": "/api/algorithm/ai",
-  "requestId": "uuid",
-  "areaId": 1,
-  "missing": ["policy.onnx"]
+  "message": "Area is not ready",
+  "requestId": "..."
 }
 ```
 
-| Error code | HTTP | Khi nào |
-|-----------|------|---------|
-| `INVALID_INPUT` | 400 | Body validate fail (Pydantic 422 wrapped → 400 by handler) hoặc `crosses` rỗng |
-| `MULTIPLE_AREAS_NOT_ALLOWED` | 400 | Request có >1 area |
-| `AREA_NOT_FOUND` | 404 | `areaId` chưa register |
-| `AREA_NOT_READY` | 409 | Area register nhưng chưa đủ artifact / bundle / file |
-| `CONFIG_NOT_FOUND` | 404 | network.json hoặc cross config thiếu (strict mode) |
-| `POLICY_NOT_FOUND` | 404 | Bundle có DB record nhưng policy.onnx mất trên disk |
-| `INTERNAL_ERROR` | 500 | Exception khác |
+Common codes:
 
-## 5. Latency expectations
+| Code | Meaning | Core Controller action |
+|---|---|---|
+| `AREA_NOT_READY` | Chưa có active bundle/config | Fallback, alert ops |
+| `CONFIG_NOT_FOUND` | Thiếu network/config | Fallback, sync lại topology |
+| `MODEL_NOT_FOUND` | Thiếu policy/model file | Fallback, rollback/redeploy |
+| `INVALID_INPUT` | Payload sai hoặc thiếu static không hydrate được | Fallback, log input |
+| `MULTIPLE_AREAS_NOT_ALLOWED` | Request gom nhiều area khi strict | Tách request theo area |
 
-| Tình huống | p50 | p95 |
-|-----------|-----|-----|
-| First request sau khi service start (cold start ONNX) | 100-300ms | 500ms |
-| Steady state, 1 cross, model ~1MB | 20-40ms | 60-80ms |
-| Steady state, 5 crosses, model ~10MB | 50-100ms | 150-200ms |
+## Minimal Production Example
 
-Spec yêu cầu < 100ms (p50). Đo qua `ai_inference_latency_ms_bucket` Prometheus metric.
-
-## 6. Headers
-
-### 6.1 X-Request-Id (request)
-
-Optional. Nếu Core Controller gửi, service dùng cho:
-- Log line correlation
-- `inference_audit.request_id`
-- Response header `X-Request-Id`
-
-Nếu không gửi, service tự sinh UUID.
-
-### 6.2 X-Internal-API-Key
-
-**Không yêu cầu** cho `/api/algorithm/ai` (public). Chỉ cần cho `/internal/*` và `/ops/*`.
-
-## 7. Ví dụ đầy đủ
-
-### Request
-
-```http
-POST /api/algorithm/ai HTTP/1.1
-Content-Type: application/json
-X-Request-Id: 60fde875-567a-4ff2-96c8-45d344227600
-
-{
-  "crosses": [
-    {
-      "id": 1,
-      "areaId": 1,
-      "type": 1,
-      "cycle": {
-        "id": 1,
-        "createdDate": "2026-04-24T12:00:00Z",
-        "createdBy": "system",
-        "modifiedDate": "2026-04-24T12:00:00Z",
-        "modifiedBy": "system",
-        "isActive": 1,
-        "crossId": 1,
-        "numberOfStages": 2,
-        "oldId": "C_1",
-        "cycleLength": 90
-      },
-      "stages": [
-        {"id": 1, "stageCode": "Phase 0", "oldId": "p0", "primary": 1, "weight": 1.0,
-         "minGreenTime": 15, "maxGreenTime": 120, "yellow": 3, "redClear": 1,
-         "duration": 52, "movements": []},
-        {"id": 2, "stageCode": "Phase 2", "oldId": "p2", "primary": 1, "weight": 1.0,
-         "minGreenTime": 15, "maxGreenTime": 120, "yellow": 3, "redClear": 1,
-         "duration": 32, "movements": []}
-      ],
-      "roads": [
-        {"id": 1, "roadName": "N2C", "direction": 1, "numberOfLanes": 3,
-         "flowRoad": 500, "saturationFlow": 5400, "averageSpeed": 27.78,
-         "occupancySpace": 15.0, "insideArea": 1, "length": 142.34},
-        {"id": 2, "roadName": "E2C", "direction": 2, "numberOfLanes": 1,
-         "flowRoad": 100, "saturationFlow": 1200, "averageSpeed": 13.89,
-         "occupancySpace": 10.0, "insideArea": 1, "length": 196.34},
-        {"id": 3, "roadName": "S2C", "direction": 3, "numberOfLanes": 3,
-         "flowRoad": 500, "saturationFlow": 5400, "averageSpeed": 27.78,
-         "occupancySpace": 15.0, "insideArea": 1, "length": 112.11},
-        {"id": 4, "roadName": "W2C", "direction": 4, "numberOfLanes": 1,
-         "flowRoad": 100, "saturationFlow": 1200, "averageSpeed": 13.89,
-         "occupancySpace": 10.0, "insideArea": 1, "length": 200.23}
-      ]
-    }
-  ],
-  "cycleTime": 90,
-  "yellowTime": 3
-}
+```bash
+curl -X POST http://localhost:8001/api/algorithm/ai \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: demo-001" \
+  -d '{
+    "areaId": 1,
+    "timestamp": "2026-06-02T10:00:00+07:00",
+    "crosses": [
+      {
+        "crossId": 1001,
+        "cycleId": 10,
+        "stages": [
+          {"stageId": 1, "greenTime": 41},
+          {"stageId": 2, "greenTime": 42}
+        ],
+        "roads": [
+          {
+            "roadId": 501,
+            "averageSpeed": 32.5,
+            "averageSpeedUnit": "km/h",
+            "occupancySpace": 45.2,
+            "queueLength": 28,
+            "totalVehicle": 120,
+            "windowSeconds": 300
+          }
+        ]
+      }
+    ]
+  }'
 ```
 
-### Response 200
+## See Also
 
-```json
-{
-  "status": 1,
-  "numIntersections": 1,
-  "areaIds": [1],
-  "algorithmOutputs": [
-    {
-      "cycleLength": 90,
-      "crossId": 1,
-      "areaId": 1,
-      "crossName": null,
-      "cycleId": 1,
-      "createdDate": "2026-04-24T12:00:00Z",
-      "phases": [
-        {"stageId": 1, "stageCode": "Phase 0", "oldId": "p0",
-         "greenTime": 47, "yellowTime": 3, "redClearTime": 1},
-        {"stageId": 2, "stageCode": "Phase 2", "oldId": "p2",
-         "greenTime": 35, "yellowTime": 3, "redClearTime": 1}
-      ]
-    }
-  ]
-}
-```
-
-## 8. Tham khảo
-
-- [../test_payload.json](../test_payload.json) — payload mẫu sẵn dùng
-- [../docs/api-reference.md](../docs/api-reference.md) — tất cả endpoints
-- [../docs/architecture.md](../docs/architecture.md) — pipeline 4 bước (Topology → ONNX → Phase → Guardrails)
-- [../docs/troubleshooting.md](../docs/troubleshooting.md) — common errors khi tích hợp
-- [../postman/README.md](../postman/README.md) — Postman collection có sẵn
+- [../docs/core-controller-api-contract.md](../docs/core-controller-api-contract.md)
+- [../docs/api-reference.md](../docs/api-reference.md)

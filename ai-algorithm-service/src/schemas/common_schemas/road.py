@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class Road(BaseModel):
@@ -14,7 +14,14 @@ class Road(BaseModel):
         ge=1,
         description="If this road connects to another controlled intersection, its id. Used to build neighbor graph."
     )
-    saturationFlow: float = Field(gt=0, description="Maximum sustainable flow under ideal conditions (vehicles/hour)")
+    saturationFlow: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Maximum sustainable flow under ideal conditions (vehicles/hour). "
+            "Production runtime can hydrate this from the synced real-network snapshot."
+        ),
+    )
     averageSpeed: float = Field(
         ge=0,
         description="Average speed of vehicles on this road (unit in averageSpeedUnit, default m/s)"
@@ -55,3 +62,11 @@ class Road(BaseModel):
     )
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_compact_aliases(cls, data):
+        if isinstance(data, dict) and "id" not in data and "roadId" in data:
+            data = dict(data)
+            data["id"] = data["roadId"]
+        return data

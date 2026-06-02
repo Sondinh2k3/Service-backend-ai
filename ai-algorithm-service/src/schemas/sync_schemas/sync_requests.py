@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AreaUpsert(BaseModel):
@@ -70,6 +70,17 @@ class RealNetworkSnapshotSync(BaseModel):
     cycles: List[Dict[str, Any]] = Field(default_factory=list)
     stages: List[Dict[str, Any]] = Field(default_factory=list)
     simToReal: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_snake_case_overlay(cls, data):
+        """Accept both API-facing camelCase and service-internal snake_case."""
+        if isinstance(data, dict) and "simToReal" not in data and "sim_to_real" in data:
+            data = dict(data)
+            data["simToReal"] = data["sim_to_real"]
+        return data
 
 
 class FinalizeSync(BaseModel):

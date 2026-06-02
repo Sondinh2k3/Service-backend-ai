@@ -100,7 +100,13 @@ def upsert_intersection_config(area_id: int, cross_id: int, payload: dict):
 def run_ai_algorithm(ai_input: AIInput, request: Request):
     """Inference cho 1 area (enforce 1 area/request neu bat cau hinh)."""
     request_id = getattr(request.state, "request_id", "")
-    area_ids = sorted({c.areaId for c in ai_input.crosses})
+    area_ids = sorted(
+        {
+            area_id
+            for area_id in ((c.areaId or ai_input.areaId) for c in ai_input.crosses)
+            if area_id is not None
+        }
+    )
     logger.info(
         f"request_id={request_id} RunAI crosses={len(ai_input.crosses)} areas={area_ids}"
     )

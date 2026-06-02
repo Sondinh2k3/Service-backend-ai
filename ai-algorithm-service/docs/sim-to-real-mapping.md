@@ -1,86 +1,72 @@
-# Sim → Real Mapping
+# Sim-to-Real Mapping
 
-Tài liệu này giải thích mapping giữa ID phía SUMO và ID phía DB thật trong pipeline hiện tại. Luồng chạy chi tiết nằm ở [end-to-end-test.md](end-to-end-test.md) và [PIPELINE.md](PIPELINE.md).
+`simToReal` là cầu nối giữa topology mô phỏng/training và topology thật trong DB/Core Controller.
 
----
-
-## 1. Ba Không Gian ID
+## 1. Three ID spaces
 
 ```text
-SUMO / Training                 Runtime Standard               Real DB
-----------------                ----------------               ----------------
-sim_tls_id                      std_phase_idx 0..7             real_cross_id
-sim_edge_id                     direction_idx 0..3             real_road_id
-sim_phase_idx                   action_idx                     real_cycle_id
-sim_network.json                feature channels               real_stage_id
+SUMO / training ID
+  -> standard runtime phase/direction
+  -> real DB cross/road/cycle/stage ID
 ```
 
-Policy chỉ hiểu standard/action/feature space. Vì vậy runtime bundle phải khóa mapping từ sim sang real trước khi inference.
-
-`direction_idx` (0=N, 1=E, 2=S, 3=W) **không lấy thẳng từ cột DB**, mà được suy lại trong [real_normalization.py](../src/ops/real_normalization.py) bằng cách:
-- Ưu tiên dùng GPS (cross center + road polyline) → thuật toán GPI giống Service-ai → khử mọi ambiguity về encoding 4-dir vs 8-dir.
-- Fallback legacy `from_cross_direction` / `to_cross_direction` với encoding tự auto-detect.
-
-Chi tiết: [PIPELINE.md §4.6](PIPELINE.md#46-direction-inference-gps-first-legacy-fallback).
-
----
-
-## 2. Artifact Mapping
-
-| Artifact | Nguồn | Chứa gì |
+| Space | Example | Owner |
 |---|---|---|
-| `sim_network.json` | Training team | SUMO TLS IDs, edge IDs, lane/direction/phases |
-| `real_normalization.json` | AI service compile từ `real_network_snapshot` | real cross/road/cycle/stage IDs, roads_static |
-| `deployment_map.json` | AI service generate khi compose | Bridge sim IDs → real IDs |
-| `intersections/cross_<real_id>.json` | Runtime bundle | Config runtime keyed bằng real DB IDs |
+| Sim ID | `33202549` | Training/SUMO |
+| Standard runtime | phase index `0..7`, direction `N/E/S/W` | AI Service |
+| Real DB ID | `cross_id=567001`, `road_id=9001` | Core/backend management |
 
----
+## 2. What `simToReal` is
 
-## 3. Cách Composer Map
+Example:
 
-Trong [src/ops/composer.py](../src/ops/composer.py), composer tạo `deployment_map.json` theo thứ tự ưu tiên:
-
-1. Nếu `real_normalization.json` có `sim_to_real`, `cross_map`, hoặc `sim_to_real_crosses`, dùng mapping explicit.
-2. Nếu từng real cross có `sim_tls_id` hoặc `sim_cross_id`, dùng field đó.
-3. Nếu không có mapping explicit nhưng số cross sim và real bằng nhau, map theo thứ tự và ghi warning `AUTO_CROSS_MAPPING_BY_ORDER`.
-4. Nếu không map được, compose fail.
-
-Production nên gửi `simToReal` trong real network snapshot để tránh map sai cross khi dữ liệu DB reorder.
-
----
-
-## 4. Validation Compatibility
-
-Composer validate trước khi build runtime bundle:
-
-| Check | Fail khi |
-|---|---|
-| Cross coverage | Sim cross thiếu real mapping hoặc real mapping trỏ sai |
-| Direction mapping | Sim có edge ở hướng N/E/S/W nhưng real thiếu road tương ứng — đồng nghĩa cả GPS lẫn legacy code đều không xác định được hướng đó (xem `_classify_road_at_cross`) |
-| Phase/stage count | Số sim phases khác số real stages trong primary cycle |
-| Standard phase | `std_phase_idx` sinh ra không khớp `actual_to_standard` trong sim network |
-| Bundle checksum | Runtime bundle bị sửa sau khi build |
-
-Kết quả được ghi vào `compatibility_report.json` và nhúng vào final runtime bundle.
-
-Khi `Direction mapping` fail, không có round-robin fallback — composer dừng ngay. Đây là thiết kế chủ động: feed sai channel vào policy đã train trên 4 hướng N/E/S/W sẽ ra inference output không xác định, an toàn hơn khi fail loud.
-
----
-
-## 5. Runtime Không Dùng Sim ID
-
-Sau khi activate, runtime inference chỉ dùng real DB IDs:
-
-```text
-controller payload cross.id / road.id / cycle.id / stage.id
-        ↓
-intersections/cross_<real_id>.json
-        ↓
-FeatureBuilder + PhaseNormalizer
-        ↓
-ONNX policy
-        ↓
-response stageId real DB
+```json
+{
+  "simToReal": {
+    "33202549": 567001,
+    "360082": 567002
+  }
+}
 ```
 
-`sim_network.json` chỉ còn vai trò audit/debug trong runtime bundle.
+It maps:
+
+```text
+sim cross/TLS ID -> real DB cross ID
+```
+
+It is not available in `management.sql`. The management DB only knows real IDs. Production must provide this mapping separately.
+
+## 3. Valid production sources
+
+- Operator config in an integration UI.
+- Mapping file delivered by training/integration team.
+- Auto-suggest tool using name, `old_id`, GPS, topology similarity, then operator confirmation.
+- Explicit `sim_tls_id` or `sim_cross_id` attached to each real cross, if that field is intentionally added and confirmed.
+
+## 4. Composer priority
+
+The composer resolves mapping in this order:
+
+1. Explicit `simToReal` / `sim_to_real` / cross map.
+2. Confirmed `sim_tls_id` or `sim_cross_id` on real crosses.
+3. Order-based fallback when sim cross count equals real cross count.
+4. Fail if mapping cannot be resolved.
+
+Order-based fallback writes warning `AUTO_CROSS_MAPPING_BY_ORDER`.
+
+## 5. Production rule
+
+Do not activate a production runtime bundle if:
+
+- `simToReal` is missing or unconfirmed.
+- `compatibility_report.json` has error.
+- `compatibility_report.json` has warning `AUTO_CROSS_MAPPING_BY_ORDER`.
+
+That warning is acceptable only for demo/dev because DB export order can change and map the wrong intersection.
+
+## 6. Related files
+
+- [PIPELINE.md](PIPELINE.md)
+- [core-controller-api-contract.md](core-controller-api-contract.md)
+- [troubleshooting.md](troubleshooting.md)

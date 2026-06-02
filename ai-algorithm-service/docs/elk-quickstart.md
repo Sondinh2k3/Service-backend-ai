@@ -1,78 +1,58 @@
-# ELK Quickstart (Local)
+# ELK Quickstart
 
-Muc tieu: xem log cua ai-runtime/ai-ops tren Kibana khi chay local Docker Compose.
+Use this only for local log exploration. Production observability should use the customer/vendor monitoring stack.
 
-Log app xuat JSON (ELK-friendly), Logstash se parse vao field `app.*`.
-
-## 1. Start ELK stack
+## Start stack
 
 ```bash
 cd ai-algorithm-service
-docker compose --profile observability up -d
+docker compose up -d elasticsearch kibana logstash
 ```
 
-Neu Elasticsearch khong len do `vm.max_map_count`:
+## Verify Elasticsearch
 
 ```bash
-sudo sysctl -w vm.max_map_count=262144
+curl http://localhost:9200
 ```
 
-## 2. Verify Elasticsearch
+## Open Kibana
 
-```bash
-curl http://localhost:9200/_cluster/health
+```text
+http://localhost:5601
 ```
 
-Expected: `status` = `yellow` hoac `green`.
+Create an index pattern for the log index used by the compose stack, then filter by:
 
-## 3. Tao Index Pattern trong Kibana
+- `service.name`
+- `request_id`
+- `bundle_id`
+- `network_id`
+- `area_id`
 
-Mo Kibana: http://localhost:5601
-
-- Vao Stack Management -> Data Views
-- Tao data view: `ai-service-logs-*`
-- Chon time field: `@timestamp`
-
-## 4. Tao log mau de test
+## Generate sample logs
 
 ```bash
 curl http://localhost:8001/health
-curl http://localhost:8002/health
+curl http://localhost:8001/ready
 ```
 
-Vao Kibana -> Discover -> chon `ai-service-logs-*`.
-
-## 5. Filter theo service
-
-Neu log co field `service`, co the filter:
-
-```
-service : "ai-runtime"
-```
-
-Hoac filter theo `container_id` neu `service` chua co.
-
-Neu can filter theo level hoac logger:
-
-```
-app.level : "ERROR"
-app.logger : "ai_algo_service"
-```
-
-## 6. Check Logstash pipeline
-
-Logstash doc log tu `/var/lib/docker/containers/*/*.log` theo config:
-
-- `observability/logstash/pipeline.conf`
-
-Kiem tra Logstash:
+For inference logs, include `X-Request-Id`:
 
 ```bash
-docker compose logs logstash | tail -n 50
+curl -X POST http://localhost:8001/api/algorithm/ai \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: elk-demo-001" \
+  -d '{"crosses":[]}'
 ```
 
-## 7. Troubleshooting nhanh
+The request may fail validation; that is fine for checking log ingestion.
 
-- Elasticsearch khong len: set `vm.max_map_count` nhu buoc 1.
-- Khong co index: check `http://localhost:9200/_cat/indices?v`.
-- Kibana khong thay data: tao lai data view `ai-service-logs-*`.
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Kibana has no data | Logstash container running, index pattern exists |
+| Elasticsearch not reachable | `docker compose ps elasticsearch` |
+| Missing request id | Caller did not set `X-Request-Id` |
+
+More: [troubleshooting.md](troubleshooting.md).

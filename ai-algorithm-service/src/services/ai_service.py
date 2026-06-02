@@ -52,6 +52,9 @@ from src.schemas.ai_schemas.ai_input import AIInput
 from src.schemas.ai_schemas.ai_output import AIOutput
 from src.schemas.ai_schemas.algorithm_output import AlgorithmOutput
 from src.schemas.common_schemas.cross import Cross
+from src.schemas.common_schemas.cycle import Cycle
+from src.schemas.common_schemas.road import Road
+from src.schemas.common_schemas.stage_input import StageInput
 from src.schemas.common_schemas.stage_output import StageOutput
 from src.services import audit_service
 from src.services.model_manager import AreaPolicy, load_policy
@@ -69,7 +72,7 @@ class AIService:
         self.green_time_step = ai_input.greenTimeStep
 
     def run(self, ai_input: AIInput, *, request_id: str = "") -> AIOutput:
-        crosses = ai_input.crosses
+        crosses = self._hydrate_runtime_crosses(ai_input)
         if not crosses:
             raise AlgorithmException(
                 "Danh sach cross khong duoc rong.",
@@ -177,6 +180,178 @@ class AIService:
             areaIds=sorted(groups.keys()),
             algorithmOutputs=[o for o in outputs if o is not None],
         )
+
+    def _hydrate_runtime_crosses(self, ai_input: AIInput) -> List[Cross]:
+        """Hydrate compact production input with static data from synced topology."""
+        hydrated: List[Cross] = []
+        for raw in ai_input.crosses:
+            area_id = raw.areaId or ai_input.areaId
+            if area_id is None:
+                raise AlgorithmException(
+                    f"Cross {raw.id} thieu areaId. Gui top-level areaId hoac cross.areaId.",
+                    code=ErrorCode.INVALID_INPUT,
+                )
+
+            cfg = get_config(int(area_id), raw.id)
+            cycle = self._hydrate_cycle(raw, cfg, int(area_id))
+            cycle_meta = self._cycle_meta(cfg, cycle.id)
+            stages = self._hydrate_stages(raw, cfg, cycle_meta, int(area_id))
+            roads = self._hydrate_roads(raw, cfg)
+
+            hydrated.append(
+                Cross(
+                    id=raw.id,
+                    areaId=int(area_id),
+                    x=raw.x,
+                    y=raw.y,
+                    cycle=cycle,
+                    stages=stages,
+                    roads=roads,
+                )
+            )
+        return hydrated
+
+    def _hydrate_cycle(self, raw: Cross, cfg, area_id: int) -> Cycle:
+        cycle_id = raw.cycle.id if raw.cycle is not None else raw.cycleId
+        if cycle_id is None and cfg is not None:
+            cycle_id = cfg.primary_cycle_id
+        if cycle_id is None:
+            raise AlgorithmException(
+                f"Cross {raw.id} thieu cycleId va config khong co primary_cycle_id.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        meta = self._cycle_meta(cfg, int(cycle_id))
+        cycle_length = (
+            raw.cycle.cycleLength
+            if raw.cycle is not None
+            else raw.cycleLength
+        )
+        if cycle_length is None and meta:
+            cycle_length = meta.get("cycle_length")
+        if cycle_length is None:
+            raise AlgorithmException(
+                f"Cross {raw.id} cycle={cycle_id} thieu cycleLength.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        return Cycle(
+            id=int(cycle_id),
+            createdDate=(
+                raw.cycle.createdDate
+                if raw.cycle is not None
+                else (meta or {}).get("created_date")
+            ),
+            crossName=(
+                raw.cycle.crossName
+                if raw.cycle is not None
+                else (meta or {}).get("cycle_name")
+            ),
+            cycleLength=float(cycle_length),
+        )
+
+    @staticmethod
+    def _cycle_meta(cfg, cycle_id: int) -> Optional[dict]:
+        if cfg is None or cfg.cycles is None:
+            return None
+        return cfg.cycles.get(str(cycle_id))
+
+    def _hydrate_stages(
+        self,
+        raw: Cross,
+        cfg,
+        cycle_meta: Optional[dict],
+        area_id: int,
+    ) -> List[StageInput]:
+        stage_meta_by_id = {
+            int(item["id"]): item
+            for item in (cycle_meta or {}).get("stages", [])
+            if item.get("id") is not None
+        }
+
+        input_stages = list(raw.stages)
+        if not input_stages and cycle_meta:
+            input_stages = [
+                StageInput(id=int(item["id"]))
+                for item in (cycle_meta.get("stages") or [])
+                if item.get("id") is not None
+            ]
+
+        if not input_stages:
+            raise AlgorithmException(
+                f"Cross {raw.id} thieu stages va config khong co stage static.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        stages: List[StageInput] = []
+        for stage in input_stages:
+            meta = stage_meta_by_id.get(stage.id, {})
+            yellow = self._first_int(stage.yellow, meta.get("yellow"), (cycle_meta or {}).get("yellow"))
+            red_clear = self._first_int(stage.redClear, meta.get("red_clear"), (cycle_meta or {}).get("red_clear"), 0)
+            green = self._first_int(stage.greenTime, meta.get("green"))
+            duration = self._first_int(stage.duration)
+            if duration is None and green is not None and yellow is not None and red_clear is not None:
+                duration = green + yellow + red_clear
+            if duration is None:
+                raise AlgorithmException(
+                    (
+                        f"Cross {raw.id} stage={stage.id} thieu duration/greenTime "
+                        f"va snapshot khong co green static."
+                    ),
+                    code=ErrorCode.INVALID_INPUT,
+                    area_id=area_id,
+                )
+            if yellow is None:
+                raise AlgorithmException(
+                    f"Cross {raw.id} stage={stage.id} thieu yellow va snapshot khong co yellow static.",
+                    code=ErrorCode.INVALID_INPUT,
+                    area_id=area_id,
+                )
+
+            stages.append(
+                StageInput(
+                    id=stage.id,
+                    stageCode=stage.stageCode or meta.get("stage_code") or str(stage.id),
+                    oldId=stage.oldId or meta.get("old_id") or str(stage.id),
+                    yellow=int(yellow),
+                    redClear=int(red_clear or 0),
+                    duration=int(duration),
+                )
+            )
+        return stages
+
+    def _hydrate_roads(self, raw: Cross, cfg) -> List[Road]:
+        roads_static = (cfg.roads_static or {}) if cfg is not None else {}
+        roads: List[Road] = []
+        for road in raw.roads:
+            static = roads_static.get(str(road.id), {})
+            saturation = road.saturationFlow or static.get("saturation_flow")
+            roads.append(
+                Road(
+                    id=road.id,
+                    direction=road.direction,
+                    toCrossId=road.toCrossId,
+                    saturationFlow=float(saturation) if saturation is not None else None,
+                    averageSpeed=road.averageSpeed,
+                    occupancySpace=road.occupancySpace,
+                    totalVehicle=road.totalVehicle,
+                    windowSeconds=road.windowSeconds,
+                    averageSpeedUnit=road.averageSpeedUnit,
+                    queueLength=road.queueLength,
+                    density=road.density,
+                )
+            )
+        return roads
+
+    @staticmethod
+    def _first_int(*values) -> Optional[int]:
+        for value in values:
+            if value is None or value == "":
+                continue
+            return int(value)
 
     # ------------------------------------------------------------------
     # Per-area pipeline
@@ -402,12 +577,53 @@ class AIService:
             actions_standard, cross, config, keep_action_index=keep_idx,
         )
         num_stages = len(cross.stages)
+        cycle_length = int(cross.cycle.cycleLength)
+        min_green_limit, max_green_limit = self._effective_green_bounds()
 
-        total_yellow_time = self.yellow_time * num_stages
-        total_green_time = int(cross.cycle.cycleLength) - total_yellow_time
+        if num_stages == 0:
+            raise AlgorithmException(
+                f"Cross {cross.id} khong co stage nao.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+        if min_green_limit > max_green_limit:
+            raise AlgorithmException(
+                f"Green-time bounds khong hop le: min={min_green_limit} > max={max_green_limit}.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        fixed_times = [
+            max(0, stage.yellow) + max(0, stage.redClear)
+            for stage in cross.stages
+        ]
+        total_fixed_time = sum(fixed_times)
+        total_green_time = cycle_length - total_fixed_time
+        min_required_green = min_green_limit * num_stages
+        max_allowed_green = max_green_limit * num_stages
+
+        if total_green_time < min_required_green:
+            raise AlgorithmException(
+                f"Cross {cross.id} cycleLength={cycle_length} khong du de cap "
+                f"minGreen={min_green_limit} cho {num_stages} stages "
+                f"sau fixedTime={total_fixed_time}.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+        if total_green_time > max_allowed_green:
+            raise AlgorithmException(
+                f"Cross {cross.id} cycleLength={cycle_length} vuot qua kha nang "
+                f"maxGreen={max_green_limit} cho {num_stages} stages "
+                f"sau fixedTime={total_fixed_time}.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
 
         current_green_times = [
-            max(self.min_green, stage.duration - stage.yellow - stage.redClear)
+            max(
+                min_green_limit,
+                stage.duration - max(0, stage.yellow) - max(0, stage.redClear)
+            )
             for stage in cross.stages
         ]
 
@@ -425,12 +641,14 @@ class AIService:
         for i, current_g in enumerate(current_green_times):
             action = stage_actions[i] if i < len(stage_actions) else keep_idx
             adj = _action_to_delta(action)
-            new_g = max(self.min_green, min(self.max_green, current_g + adj))
+            new_g = max(min_green_limit, min(max_green_limit, current_g + adj))
             new_green_times.append(new_g)
 
         new_green_times_arr = self._rescale_green_times(
             np.array(new_green_times, dtype=float),
             total_green_time,
+            min_green=min_green_limit,
+            max_green=max_green_limit,
         )
 
         # Guardrails (Lop 4 — Safety Layer)
@@ -452,7 +670,7 @@ class AIService:
             current_green_times=current_green_times,
             yellow_times=[s.yellow for s in cross.stages],
             red_clear_times=[s.redClear for s in cross.stages],
-            cycle_length=int(cross.cycle.cycleLength),
+            cycle_length=cycle_length,
             masked_stage_indices=masked_indices,
         )
         if report.triggered:
@@ -464,27 +682,38 @@ class AIService:
                 record_guardrail_violation(v.rule)
 
         green_by_idx = {d.stage_idx: d.green_time for d in report.decisions}
+        final_green_times = [
+            green_by_idx.get(
+                idx,
+                int(new_green_times_arr[idx]) if idx < len(new_green_times_arr) else self.min_green,
+            )
+            for idx in range(num_stages)
+        ]
+        final_green_times_arr = self._reconcile_green_times(
+            np.array(final_green_times, dtype=int),
+            total_green_time,
+            locked_indices=masked_indices,
+            cross_id=cross.id,
+            area_id=area_id,
+            min_green=min_green_limit,
+            max_green=max_green_limit,
+        )
 
         output_stages: List[StageOutput] = []
         for idx, stage in enumerate(cross.stages):
-            if idx in green_by_idx:
-                green_time = green_by_idx[idx]
-            elif idx < len(new_green_times_arr):
-                green_time = int(new_green_times_arr[idx])
-            else:
-                green_time = self.min_green
+            green_time = int(final_green_times_arr[idx])
             output_stages.append(StageOutput(
                 stageId=stage.id,
                 stageCode=stage.stageCode,
                 oldId=stage.oldId,
-                greenTime=max(1, int(green_time)),
+                greenTime=max(1, green_time),
                 yellowTime=stage.yellow,
                 redClearTime=stage.redClear,
             ))
 
         return (
             AlgorithmOutput(
-                cycleLength=int(cross.cycle.cycleLength),
+                cycleLength=cycle_length,
                 crossId=cross.id,
                 areaId=area_id,
                 crossName=getattr(cross.cycle, "crossName", None),
@@ -495,17 +724,33 @@ class AIService:
             report.triggered,
         )
 
-    def _rescale_green_times(self, green_times: np.ndarray, target_total: int) -> np.ndarray:
-        green_times = np.clip(green_times, self.min_green, self.max_green)
+    def _effective_green_bounds(self) -> Tuple[int, int]:
+        settings = get_settings()
+        if not settings.guardrail_enabled:
+            return self.min_green, self.max_green
+        return (
+            max(self.min_green, settings.guardrail_min_green),
+            min(self.max_green, settings.guardrail_max_green),
+        )
+
+    def _rescale_green_times(
+        self,
+        green_times: np.ndarray,
+        target_total: int,
+        *,
+        min_green: int,
+        max_green: int,
+    ) -> np.ndarray:
+        green_times = np.clip(green_times, min_green, max_green)
 
         current_sum = np.sum(green_times)
         if current_sum > 0 and current_sum != target_total:
             green_times = green_times * (target_total / current_sum)
-            green_times = np.maximum(green_times, self.min_green)
+            green_times = np.maximum(green_times, min_green)
 
             excess = np.sum(green_times) - target_total
             if abs(excess) > 0.5:
-                above_min = green_times - self.min_green
+                above_min = green_times - min_green
                 above_total = np.sum(above_min)
                 if above_total > 0:
                     green_times -= above_min * (excess / above_total)
@@ -522,7 +767,73 @@ class AIService:
             indices = np.argsort(int_vals)[::-1]
             for i in range(-remainder):
                 idx = indices[i % len(indices)]
-                if int_vals[idx] > self.min_green:
+                if int_vals[idx] > min_green:
                     int_vals[idx] -= 1
 
         return int_vals
+
+    def _reconcile_green_times(
+        self,
+        green_times: np.ndarray,
+        target_total: int,
+        *,
+        locked_indices: List[int],
+        cross_id: int,
+        area_id: int,
+        min_green: int,
+        max_green: int,
+    ) -> np.ndarray:
+        """Adjust integer green times so final green sum matches target_total.
+
+        Locked stages are masked stages whose current green must be preserved.
+        Non-locked stages absorb rounding/guardrail deltas within min/max bounds.
+        """
+        values = np.array(green_times, dtype=int)
+        locked = set(locked_indices or [])
+        adjustable = [i for i in range(len(values)) if i not in locked]
+
+        for i in adjustable:
+            values[i] = int(np.clip(values[i], min_green, max_green))
+
+        delta = int(target_total - np.sum(values))
+        if delta == 0:
+            return values
+
+        if not adjustable:
+            raise AlgorithmException(
+                f"Cross {cross_id} khong the can bang cycleLength vi tat ca stage deu bi locked.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        if delta > 0:
+            for idx in sorted(adjustable, key=lambda i: values[i]):
+                capacity = max_green - values[idx]
+                if capacity <= 0:
+                    continue
+                add = min(capacity, delta)
+                values[idx] += add
+                delta -= add
+                if delta == 0:
+                    break
+        else:
+            delta = -delta
+            for idx in sorted(adjustable, key=lambda i: values[i], reverse=True):
+                capacity = values[idx] - min_green
+                if capacity <= 0:
+                    continue
+                sub = min(capacity, delta)
+                values[idx] -= sub
+                delta -= sub
+                if delta == 0:
+                    break
+
+        if delta != 0:
+            raise AlgorithmException(
+                f"Cross {cross_id} khong the can bang greenTime ve target={target_total} "
+                f"voi minGreen={min_green}, maxGreen={max_green}, locked={sorted(locked)}.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+            )
+
+        return values

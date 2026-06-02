@@ -74,6 +74,11 @@ class RealCycle:
     id: int
     cross_id: int
     cycle_type: int
+    cycle_length: Optional[int] = None
+    cycle_name: Optional[str] = None
+    created_date: Optional[str] = None
+    yellow: Optional[int] = None
+    red_clear: Optional[int] = None
 
 
 @dataclass
@@ -81,6 +86,13 @@ class RealStage:
     id: int
     cycle_id: int
     order_number: int
+    stage_code: Optional[str] = None
+    old_id: Optional[str] = None
+    green: Optional[int] = None
+    yellow: Optional[int] = None
+    red_clear: Optional[int] = None
+    min_green_time: Optional[int] = None
+    max_green_time: Optional[int] = None
 
 
 def _now_iso() -> str:
@@ -383,13 +395,26 @@ def fetch_cycles(engine, cross_ids: Iterable[int]) -> List[RealCycle]:
     rows = _fetch_all(
         engine,
         """
-        SELECT id, cross_id, cycle_type
+        SELECT id, cross_id, cycle_type, cycle_length, cycle_name, created_date,
+               yellow, red_clear
         FROM v_cycle
         WHERE cross_id IN :ids AND (is_active = 1 OR is_active IS NULL)
         """,
         {"ids": tuple(ids)},
     )
-    return [RealCycle(id=int(r["id"]), cross_id=int(r["cross_id"]), cycle_type=int(r["cycle_type"])) for r in rows]
+    return [
+        RealCycle(
+            id=int(r["id"]),
+            cross_id=int(r["cross_id"]),
+            cycle_type=int(r["cycle_type"]),
+            cycle_length=_default_int(r.get("cycle_length"), 0) or None,
+            cycle_name=r.get("cycle_name"),
+            created_date=str(r["created_date"]) if r.get("created_date") is not None else None,
+            yellow=_default_int(r.get("yellow"), 0) or None,
+            red_clear=_default_int(r.get("red_clear"), 0) if r.get("red_clear") is not None else None,
+        )
+        for r in rows
+    ]
 
 
 def fetch_stages(engine, cycle_ids: Iterable[int]) -> List[RealStage]:
@@ -399,14 +424,29 @@ def fetch_stages(engine, cycle_ids: Iterable[int]) -> List[RealStage]:
     rows = _fetch_all(
         engine,
         """
-        SELECT id, cycle_id, order_number
+        SELECT id, cycle_id, order_number, stage_code, old_id, green, yellow,
+               red_clear, min_green_time, max_green_time
         FROM v_stage
         WHERE cycle_id IN :ids AND (is_active = 1 OR is_active IS NULL)
         ORDER BY cycle_id, order_number
         """,
         {"ids": tuple(ids)},
     )
-    return [RealStage(id=int(r["id"]), cycle_id=int(r["cycle_id"]), order_number=int(r["order_number"])) for r in rows]
+    return [
+        RealStage(
+            id=int(r["id"]),
+            cycle_id=int(r["cycle_id"]),
+            order_number=int(r["order_number"]),
+            stage_code=r.get("stage_code"),
+            old_id=r.get("old_id"),
+            green=_default_int(r.get("green"), 0) if r.get("green") is not None else None,
+            yellow=_default_int(r.get("yellow"), 0) if r.get("yellow") is not None else None,
+            red_clear=_default_int(r.get("red_clear"), 0) if r.get("red_clear") is not None else None,
+            min_green_time=_default_int(r.get("min_green_time"), 0) if r.get("min_green_time") is not None else None,
+            max_green_time=_default_int(r.get("max_green_time"), 0) if r.get("max_green_time") is not None else None,
+        )
+        for r in rows
+    ]
 
 
 def _snapshot_area_crosses(snapshot: dict, area_id: int) -> List[dict]:
@@ -544,6 +584,23 @@ def _snapshot_cycles(snapshot: dict, cross_ids: Iterable[int]) -> List[RealCycle
                 id=int(_get_value(r, "id", "cycle_id", "cycleId", "ID")),
                 cross_id=int(cross_id),
                 cycle_type=int(_get_value(r, "cycle_type", "cycleType", "CYCLE_TYPE", default=0)),
+                cycle_length=(
+                    int(_get_value(r, "cycle_length", "cycleLength", "CYCLE_LENGTH"))
+                    if _get_value(r, "cycle_length", "cycleLength", "CYCLE_LENGTH") not in (None, "")
+                    else None
+                ),
+                cycle_name=_get_value(r, "cycle_name", "cycleName", "crossName", "CYCLE_NAME"),
+                created_date=_get_value(r, "created_date", "createdDate", "CREATED_DATE"),
+                yellow=(
+                    int(_get_value(r, "yellow", "YELLOW"))
+                    if _get_value(r, "yellow", "YELLOW") not in (None, "")
+                    else None
+                ),
+                red_clear=(
+                    int(_get_value(r, "red_clear", "redClear", "RED_CLEAR"))
+                    if _get_value(r, "red_clear", "redClear", "RED_CLEAR") not in (None, "")
+                    else None
+                ),
             )
         )
     return out
@@ -563,6 +620,33 @@ def _snapshot_stages(snapshot: dict, cycle_ids: Iterable[int]) -> List[RealStage
                 id=int(_get_value(r, "id", "stage_id", "stageId", "ID")),
                 cycle_id=int(cycle_id),
                 order_number=int(_get_value(r, "order_number", "orderNumber", "ORDER_NUMBER", default=1)),
+                stage_code=_get_value(r, "stage_code", "stageCode", "STAGE_CODE"),
+                old_id=_get_value(r, "old_id", "oldId", "OLD_ID"),
+                green=(
+                    int(_get_value(r, "green", "greenTime", "GREEN"))
+                    if _get_value(r, "green", "greenTime", "GREEN") not in (None, "")
+                    else None
+                ),
+                yellow=(
+                    int(_get_value(r, "yellow", "YELLOW"))
+                    if _get_value(r, "yellow", "YELLOW") not in (None, "")
+                    else None
+                ),
+                red_clear=(
+                    int(_get_value(r, "red_clear", "redClear", "RED_CLEAR"))
+                    if _get_value(r, "red_clear", "redClear", "RED_CLEAR") not in (None, "")
+                    else None
+                ),
+                min_green_time=(
+                    int(_get_value(r, "min_green_time", "minGreenTime", "MIN_GREEN_TIME"))
+                    if _get_value(r, "min_green_time", "minGreenTime", "MIN_GREEN_TIME") not in (None, "")
+                    else None
+                ),
+                max_green_time=(
+                    int(_get_value(r, "max_green_time", "maxGreenTime", "MAX_GREEN_TIME"))
+                    if _get_value(r, "max_green_time", "maxGreenTime", "MAX_GREEN_TIME") not in (None, "")
+                    else None
+                ),
             )
         )
     return sorted(out, key=lambda s: (s.cycle_id, s.order_number))
@@ -727,6 +811,25 @@ def _build_cycles(
             "is_primary": primary_cycle_id == cy.id,
             "num_stages": len(items),
             "cycle_type": cy.cycle_type,
+            "cycle_length": cy.cycle_length,
+            "cycle_name": cy.cycle_name,
+            "created_date": cy.created_date,
+            "yellow": cy.yellow,
+            "red_clear": cy.red_clear,
+            "stages": [
+                {
+                    "id": st.id,
+                    "order_number": st.order_number,
+                    "stage_code": st.stage_code,
+                    "old_id": st.old_id,
+                    "green": st.green,
+                    "yellow": st.yellow,
+                    "red_clear": st.red_clear,
+                    "min_green_time": st.min_green_time,
+                    "max_green_time": st.max_green_time,
+                }
+                for st in items
+            ],
         }
     return out
 
@@ -868,5 +971,4 @@ def _json_dump(data: dict) -> str:
     import json
 
     return json.dumps(data, ensure_ascii=False, indent=2)
-
 

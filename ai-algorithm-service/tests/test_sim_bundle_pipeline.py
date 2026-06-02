@@ -3,17 +3,26 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from src.core.config import reset_settings_cache
+from src.core.exception import AlgorithmException
 from src.db.base import Base
 from src.db import repositories as repo
-from src.ops.composer import build_deployment_map_from_real_normalization
+from src.ops.composer import (
+    ComposeError,
+    _resolve_sim_to_real_mapping,
+    build_deployment_map_from_real_normalization,
+)
 from src.ops.real_normalization import compile_real_normalization
 from src.ops.sim_bundle import (
     SIM_BUNDLE_MANIFEST_FILENAME,
     validate_sim_bundle_dir,
 )
+from src.schemas.sync_schemas.sync_requests import RealNetworkSnapshotSync
+from src.services.sync_service import sync_real_network_snapshot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -198,3 +207,53 @@ def test_real_normalization_prefers_service_owned_snapshot(tmp_path: Path):
     assert payload["sim_to_real"] == {"33202549": 101}
     assert [c["real_cross_id"] for c in payload["crosses"]] == [101, 102]
     assert payload["crosses"][0]["cycles"]["1001"]["num_stages"] == 2
+
+
+def test_real_network_snapshot_accepts_snake_case_sim_to_real():
+    body = RealNetworkSnapshotSync.model_validate(
+        {
+            "sourceEventId": "evt-1",
+            "areaCrosses": [{"area_id": 1, "cross_id": 101}],
+            "crosses": [{"id": 101}],
+            "cycles": [{"id": 1001, "cross_id": 101}],
+            "stages": [{"id": 3001, "cycle_id": 1001}],
+            "sim_to_real": {"33202549": 101},
+        }
+    )
+
+    assert body.simToReal == {"33202549": 101}
+
+
+def test_sync_real_network_rejects_sim_to_real_outside_snapshot():
+    with pytest.raises(AlgorithmException) as exc:
+        sync_real_network_snapshot(
+            area_id=1,
+            tenant_id="default",
+            network_id="net-1",
+            schema_version="real-network/v1",
+            source_version=None,
+            area={"area_id": 1},
+            area_crosses=[{"area_id": 1, "cross_id": 101}],
+            crosses=[{"id": 101}],
+            roads=[],
+            cycles=[{"id": 1001, "cross_id": 101}],
+            stages=[{"id": 3001, "cycle_id": 1001}],
+            sim_to_real={"33202549": 999},
+            source_event_id="evt-invalid-map",
+        )
+
+    assert exc.value.extra["invalidMapping"][0]["reason"] == "REAL_CROSS_NOT_IN_SNAPSHOT"
+
+
+def test_production_rejects_order_based_sim_to_real_fallback(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    reset_settings_cache()
+    try:
+        with pytest.raises(ComposeError, match="Production khong cho phep auto-map"):
+            _resolve_sim_to_real_mapping(
+                sim_ids=["sim-a"],
+                real_crosses=[{"real_cross_id": 101}],
+                real_norm={},
+            )
+    finally:
+        reset_settings_cache()

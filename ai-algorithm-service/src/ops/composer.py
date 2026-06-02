@@ -354,6 +354,12 @@ def _resolve_sim_to_real_mapping(
             "Khong co sim_to_real mapping va so luong sim/real cross khong khop: "
             f"sim={len(sim_ids)} real={len(real_crosses)}."
         )
+    if get_settings().is_production:
+        raise ComposeError(
+            "Production khong cho phep auto-map sim_to_real theo thu tu. "
+            "Hay cung cap simToReal explicit trong real-network snapshot "
+            "hoac sim_tls_id/sim_cross_id tren tung real cross."
+        )
 
     warnings.append({
         "type": "AUTO_CROSS_MAPPING_BY_ORDER",

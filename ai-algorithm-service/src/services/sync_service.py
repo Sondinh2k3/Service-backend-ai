@@ -311,6 +311,43 @@ def sync_real_network_snapshot(
         raise AlgorithmException("Real network snapshot thieu cycles.", code=ErrorCode.INVALID_INPUT)
     if not payload["stages"]:
         raise AlgorithmException("Real network snapshot thieu stages.", code=ErrorCode.INVALID_INPUT)
+    if payload["sim_to_real"]:
+        real_cross_ids = {
+            int(cross_id)
+            for item in payload["crosses"]
+            for cross_id in (
+                item.get("id"),
+                item.get("cross_id"),
+                item.get("crossId"),
+                item.get("real_cross_id"),
+                item.get("realCrossId"),
+            )
+            if cross_id is not None
+        }
+        invalid_mapping: list[dict] = []
+        for sim_id, real_id in payload["sim_to_real"].items():
+            try:
+                normalized_real_id = int(real_id)
+            except (TypeError, ValueError):
+                invalid_mapping.append({
+                    "simId": str(sim_id),
+                    "realCrossId": real_id,
+                    "reason": "REAL_CROSS_ID_NOT_INTEGER",
+                })
+                continue
+            if normalized_real_id not in real_cross_ids:
+                invalid_mapping.append({
+                    "simId": str(sim_id),
+                    "realCrossId": normalized_real_id,
+                    "reason": "REAL_CROSS_NOT_IN_SNAPSHOT",
+                })
+        if invalid_mapping:
+            raise AlgorithmException(
+                "simToReal khong hop le: real cross id phai ton tai trong crosses cua snapshot.",
+                code=ErrorCode.INVALID_INPUT,
+                area_id=area_id,
+                extra={"invalidMapping": invalid_mapping},
+            )
 
     payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     checksum = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()

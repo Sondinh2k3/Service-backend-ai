@@ -95,6 +95,8 @@ curl -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
 
 Do not go live if `AUTO_CROSS_MAPPING_BY_ORDER` appears in the report.
 
+After snapshot sync, verify that `models/real_normalization/area_<area_id>/` is generated and contains `network.json` plus per-cross configs. Runtime compact inference depends on this static metadata.
+
 ## 7. Real topology and mapping
 
 Backend export from DB:
@@ -107,6 +109,8 @@ Backend export from DB:
 - `stages`
 
 `simToReal` must be configured or confirmed separately. It is not in management DB.
+
+Snapshot should include cycle/stage/road static metadata used at runtime: `cycle_length`, stage `yellow/red_clear`, lanes, length, speed, capacity, and enough GPS/direction information to build `direction_map`.
 
 ## 8. Rollback
 

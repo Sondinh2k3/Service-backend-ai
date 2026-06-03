@@ -58,7 +58,10 @@ Important runtime modules:
 
 ```text
 Real network snapshot
-  -> real_normalization.json
+  -> models/real_normalization/area_<area_id>/
+       real_normalization.json
+       network.json
+       intersections/cross_<cross_id>.json
 
 Sim bundle
   -> compatibility check
@@ -97,6 +100,20 @@ models/
 ```
 
 `active.json` selects the bundle used by `ai-runtime`.
+
+Compiled real normalization is stored separately from the runtime bundle:
+
+```text
+models/
+  real_normalization/
+    area_<area_id>/
+      real_normalization.json
+      network.json
+      intersections/
+        cross_<cross_id>.json
+```
+
+Runtime static metadata lookup prefers real normalization first, then active runtime bundle metadata, then legacy area config.
 
 ## 6. Real topology and mapping
 

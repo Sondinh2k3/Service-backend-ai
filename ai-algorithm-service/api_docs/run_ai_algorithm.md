@@ -5,7 +5,7 @@ Endpoint này là contract runtime chính giữa Core Controller và AI Service.
 Production flow đúng là:
 
 1. Backend/Core management sync topology tĩnh qua `PUT /internal/sync/areas/{area_id}/real-network`.
-2. AI Service compile `real_normalization.json` và compose/activate runtime bundle.
+2. AI Service compile real normalization và compose/activate runtime bundle.
 3. Core Controller gọi inference, chỉ gửi trạng thái đèn hiện tại và nhu cầu giao thông.
 
 Payload legacy gửi đầy đủ topology vẫn được hỗ trợ để tương thích, nhưng payload gọn dưới đây là chuẩn khuyến nghị cho production.
@@ -40,7 +40,6 @@ Runtime container: `http://<ai-runtime-host>:8001`.
     {
       "crossId": 1001,
       "cycleId": 10,
-      "cycleLength": 90,
       "stages": [
         {"stageId": 1, "greenTime": 41},
         {"stageId": 2, "greenTime": 42}
@@ -68,7 +67,7 @@ Runtime container: `http://<ai-runtime-host>:8001`.
 | `areaId` | integer | recommended | Area đã sync và có active bundle. Có thể đặt trong từng cross nếu cần legacy/multi-area |
 | `timestamp` | string/null | no | Timestamp quan sát, dùng cho audit/freshness phía caller |
 | `crosses` | array | yes | Danh sách nút trong cùng area. Production nên enforce 1 area/request |
-| `yellowTime` | integer | no | Legacy/request override, default `3` |
+| `yellowTime` | integer | no | Legacy/request override, default `3`; production nên hydrate theo từng stage từ snapshot |
 | `minGreen` | integer | no | Default `15` |
 | `maxGreen` | integer | no | Default `60` |
 | `greenTimeStep` | integer | no | Default `5` |
@@ -80,11 +79,11 @@ Runtime container: `http://<ai-runtime-host>:8001`.
 | `crossId` hoặc `id` | integer | yes | Real cross ID đã có trong snapshot |
 | `areaId` | integer | no | Chỉ cần nếu không có top-level `areaId` |
 | `cycleId` | integer | no | Nếu bỏ, service dùng `primary_cycle_id` trong bundle |
-| `cycleLength` | integer | no | Có thể hydrate từ snapshot nếu snapshot/bundle có `cycle_length` |
+| `cycleLength` | integer | no | Chỉ gửi khi muốn override/legacy; production hydrate từ real normalization nếu snapshot có `cycle_length` |
 | `stages` | array | yes | Trạng thái stage hiện tại |
 | `roads` | array | yes | Nhu cầu giao thông theo road |
 
-Không cần gửi `x`, `y`, `direction`, `toCrossId`, stage metadata, road static nếu đã sync topology.
+Không cần gửi `x`, `y`, `direction`, `toCrossId`, `cycleLength`, stage metadata, road static nếu đã sync topology đầy đủ.
 
 ### Stage
 
@@ -111,10 +110,20 @@ Nếu một nút có all-red thì snapshot/stage hoặc request phải có `redC
 | `totalVehicle` | integer/null | recommended | Số xe trong window |
 | `windowSeconds` | number/null | recommended | Độ dài window quan sát |
 | `density` | number/null | optional | Nếu có, service dùng trực tiếp; nếu không có có thể derive từ `totalVehicle/windowSeconds/speed` |
-| `saturationFlow` | number | no | Hydrate từ snapshot/bundle nếu đã sync |
+| `saturationFlow` | number | no | Hydrate từ real normalization/runtime bundle nếu đã sync |
 | `direction`, `toCrossId` | number/null | no | Legacy fallback; production dùng `direction_map` và `network.json` |
 
 Nếu không gửi `queueLength`, `totalVehicle`, `windowSeconds`, service vẫn chạy nhưng các channel `queue/density` sẽ fallback theo occupancy, làm nghèo tín hiệu nhu cầu giao thông.
+
+## Static Hydration Rule
+
+Với compact payload, static metadata được lấy theo thứ tự:
+
+1. Real normalization đã compile từ `PUT /internal/sync/areas/{area_id}/real-network`.
+2. Active runtime bundle, đặc biệt policy/model metadata và phase mapping.
+3. Legacy area config nếu có.
+
+Vì vậy sau khi sync snapshot đầy đủ, Core Controller không cần gửi `cycleLength`, `yellow`, `redClear`, `direction` hay `saturationFlow` trong mỗi request. Nếu service báo thiếu các field này, nguyên nhân thường là snapshot thiếu static metadata, chưa recompile real normalization, hoặc area đang dùng sai `areaId/networkId`.
 
 ## Legacy Payload
 
@@ -182,6 +191,7 @@ Application errors:
 {
   "errorCode": "AREA_NOT_READY",
   "message": "Area is not ready",
+  "path": "/api/algorithm/ai",
   "requestId": "..."
 }
 ```

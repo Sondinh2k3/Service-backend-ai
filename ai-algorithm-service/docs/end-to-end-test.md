@@ -3,7 +3,7 @@
 Goal: verify the full local flow.
 
 ```text
-Docker stack -> real snapshot -> real normalization -> sim bundle -> runtime bundle -> inference
+Docker stack -> real snapshot -> real normalization -> sim bundle -> runtime bundle -> compact inference
 ```
 
 ## 1. Prerequisites
@@ -65,6 +65,7 @@ Check:
 
 - `crosses` exists.
 - Each cross has a `direction_map`.
+- Cycles/stages include static timing such as `cycle_length`, `yellow`, and `red_clear`.
 - `sim_to_real` is present/confirmed for production.
 
 Recompile if needed:
@@ -126,7 +127,7 @@ Expected after activation: service ready and area ready.
 
 ## 8. Inference test
 
-Use the inference request in [../postman/README.md](../postman/README.md), or send a compact runtime payload that matches [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md):
+Use the example payload [api-payload-examples/inference-compact-request.json](api-payload-examples/inference-compact-request.json), the Postman collection, or send a compact runtime payload that matches [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md):
 
 ```bash
 curl -X POST http://localhost:8001/api/algorithm/ai \
@@ -138,7 +139,6 @@ curl -X POST http://localhost:8001/api/algorithm/ai \
       {
         "crossId": 567001,
         "cycleId": 1,
-        "cycleLength": 90,
         "stages": [
           {"stageId": 1, "greenTime": 40},
           {"stageId": 2, "greenTime": 40}
@@ -165,7 +165,7 @@ Validate:
 - HTTP `200`.
 - `status == 1`.
 - Response has all expected crosses.
-- Cycle duration is valid.
+- Cycle duration is valid: `sum(greenTime + yellowTime + redClearTime) ~= cycleLength`.
 
 ## 9. Race-condition test
 

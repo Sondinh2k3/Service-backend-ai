@@ -38,6 +38,6 @@ Production must not reuse the demo API key.
 
 - Internal and ops requests need `X-Internal-API-Key`.
 - Runtime inference should include `X-Request-Id`.
-- Production inference should use the compact payload: topology is synced once, runtime sends only signal state and traffic demand.
+- Production inference should use the compact payload: topology is synced once, real normalization hydrates static metadata, runtime sends only signal state and traffic demand.
 - If a request fails with `401`, check the environment key.
 - If inference returns `AREA_NOT_READY`, follow [../docs/troubleshooting.md](../docs/troubleshooting.md).

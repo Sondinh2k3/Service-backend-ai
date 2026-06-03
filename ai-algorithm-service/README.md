@@ -6,7 +6,7 @@ Backend AI cho điều khiển đèn giao thông. Service nhận trạng thái h
 
 - Runtime inference: `POST /api/algorithm/ai`.
 - Readiness guard: chỉ inference khi area/network có active bundle hợp lệ.
-- Real-network sync: nhận snapshot topology thật từ backend/Core Controller.
+- Real-network sync: nhận snapshot topology thật, compile real normalization để runtime hydrate static metadata.
 - Sim-to-real compose: ghép sim bundle với real topology để tạo runtime bundle.
 - Auto-sync: theo dõi MinIO/S3 và tự pull bundle mới.
 - Safety: guardrails min/max green, anti-starvation, strict mode, audit log, request id.
@@ -58,6 +58,7 @@ Run the full local pipeline with [docs/end-to-end-test.md](docs/end-to-end-test.
 - Use `SIM_BUNDLE_AUTO_ACTIVATE=false` until the compatibility report has been reviewed.
 - Do not go live if `compatibility_report.json` contains `AUTO_CROSS_MAPPING_BY_ORDER`.
 - `simToReal` is not exported from management DB; configure or confirm it separately.
+- Compact inference should only send dynamic state/demand; static topology is hydrated from `models/real_normalization/area_<area_id>/` and the active runtime bundle.
 
 ## Project layout
 

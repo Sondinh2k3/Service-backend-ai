@@ -59,7 +59,7 @@ Manual config override. Prefer internal sync APIs for production.
 
 Main inference endpoint.
 
-Production callers should send compact runtime state only: `areaId`, `crossId`, current cycle/stage state, and road demand observations. Static topology is hydrated from the synced snapshot/runtime bundle.
+Production callers should send compact runtime state only: `areaId`, `crossId`, current cycle/stage state, and road demand observations. Static topology is hydrated from compiled real normalization; active runtime bundle provides policy/model and model-specific mapping.
 
 See [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md).
 
@@ -90,7 +90,7 @@ Upsert area metadata.
 
 ### `PUT /internal/sync/areas/{area_id}/real-network`
 
-Sync real topology snapshot and compile `real_normalization.json`.
+Sync real topology snapshot and compile real normalization.
 
 Production payload includes real topology from DB plus confirmed `simToReal` overlay:
 
@@ -99,7 +99,7 @@ Production payload includes real topology from DB plus confirmed `simToReal` ove
   "sourceEventId": "real-network-1-v1",
   "tenantId": "tenant_kh1",
   "networkId": "network_hn_001",
-  "schemaVersion": "real-network-v1",
+  "schemaVersion": "real-network/v1",
   "sourceVersion": "2026-06-02T10:00:00+07:00",
   "area": {},
   "areaCrosses": [],
@@ -108,7 +108,7 @@ Production payload includes real topology from DB plus confirmed `simToReal` ove
   "cycles": [],
   "stages": [],
   "simToReal": {
-    "sim_cross_id": 1001
+    "33202549": 33000000101001
   }
 }
 ```
@@ -117,6 +117,7 @@ Important:
 
 - `simToReal` is not exported from management DB.
 - `cycles/stages/roads` should include enough static metadata for runtime hydrate: cycle length, stage yellow/red-clear, road lanes/length/speed/capacity.
+- Compiled files are stored under `models/real_normalization/area_<area_id>/`.
 - Do not activate production bundle if mapping falls back to order.
 
 ### `GET /internal/sync/areas/{area_id}/real-normalization`
@@ -191,15 +192,14 @@ Return lifecycle events for one bundle.
 
 ## 7. Error response
 
-Application errors use:
+Application errors use this flat schema:
 
 ```json
 {
-  "error": {
-    "code": "AREA_NOT_READY",
-    "message": "Area is not ready",
-    "requestId": "..."
-  }
+  "errorCode": "AREA_NOT_READY",
+  "message": "Area is not ready",
+  "path": "/api/algorithm/ai",
+  "requestId": "..."
 }
 ```
 

@@ -42,7 +42,7 @@ Runtime request should contain only dynamic data:
 - Current stage state: `stageId` + `greenTime` or `duration`.
 - Road demand observations: speed, occupancy, queue, vehicle count/window.
 
-Do not resend topology/static metadata every cycle. AI Service hydrates direction, road static, cycle/stage metadata, and phase mapping from the synced real-network snapshot/runtime bundle.
+Do not resend topology/static metadata every cycle. AI Service hydrates direction, road static, cycle/stage metadata, yellow/red-clear, and cycle length from compiled real normalization. Active runtime bundle provides the policy/model and can contribute model-specific phase mapping.
 
 ## 3. Data needed before production
 

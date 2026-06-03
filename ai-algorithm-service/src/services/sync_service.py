@@ -18,6 +18,7 @@ from src.db.base import get_session
 from src.preprocessing.intersection_registry import (
     IntersectionConfig,
     area_dir,
+    clear_cache as clear_intersection_config_cache,
     save_config,
 )
 from src.services.readiness_service import check_area
@@ -415,6 +416,7 @@ def sync_real_network_snapshot(
             area_id=area_id,
             output_dir=real_norm_dir,
         )
+        clear_intersection_config_cache(area_id)
         compile_result = {"status": "ok", "outputDir": str(real_norm_dir)}
         logger.info(f"[sync] real_normalization eager-compiled -> {real_norm_dir}")
     except Exception as e:
@@ -529,6 +531,7 @@ def recompile_real_normalization(*, area_id: int) -> dict:
             area_id=area_id,
             output_dir=real_norm_dir,
         )
+        clear_intersection_config_cache(area_id)
     except Exception as e:
         raise AlgorithmException(
             f"Compile real_normalization fail: {e}",

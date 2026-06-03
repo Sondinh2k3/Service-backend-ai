@@ -15,7 +15,12 @@ from src.preprocessing.feature_builder import (
     clear_cache,
     get_default_builder,
 )
-from src.preprocessing.intersection_registry import IntersectionConfig
+from src.core.config import reset_settings_cache
+from src.preprocessing.intersection_registry import (
+    IntersectionConfig,
+    clear_cache as clear_registry_cache,
+    get_config,
+)
 from src.preprocessing.phase_normalizer import (
     NUM_STANDARD_PHASES,
     _effective_phase_mapping,
@@ -302,3 +307,63 @@ def test_intersection_config_legacy_v1_no_cycles():
     # No cycles -> stage_to_std_phase returns None
     assert cfg.stage_to_std_phase_for_cycle(None) is None
     assert cfg.stage_to_std_phase_for_cycle(123) is None
+
+
+def test_get_config_prefers_real_normalization_runtime_static(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("MODEL_DIR", str(tmp_path))
+    reset_settings_cache()
+    clear_registry_cache()
+    try:
+        cfg_dir = tmp_path / "real_normalization" / "area_1308700" / "intersections"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "cross_33000000101005.json").write_text(
+            json.dumps(
+                {
+                    "cross_id": 33000000101005,
+                    "direction_map": {"700015": 0},
+                    "observation_mask": [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "primary_cycle_id": 1005,
+                    "cycles": {
+                        "1005": {
+                            "stage_to_standard_phase": {"89501": 0},
+                            "standard_phase_to_stage": {"0": 89501},
+                            "is_primary": True,
+                            "num_stages": 1,
+                            "cycle_length": 106,
+                            "yellow": 3,
+                            "red_clear": 1,
+                            "stages": [
+                                {
+                                    "id": 89501,
+                                    "order_number": 1,
+                                    "green": 102,
+                                    "yellow": 3,
+                                    "red_clear": 1,
+                                }
+                            ],
+                        }
+                    },
+                    "roads_static": {
+                        "700015": {
+                            "lanes": 2,
+                            "length_meters": 180,
+                            "speed_design_kmh": 50,
+                            "saturation_flow": 3600,
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cfg = get_config(1308700, 33000000101005)
+
+        assert cfg is not None
+        assert cfg.primary_cycle_id == 1005
+        assert cfg.cycles is not None
+        assert cfg.cycles["1005"]["cycle_length"] == 106
+        assert cfg.roads_static is not None
+        assert cfg.roads_static["700015"]["saturation_flow"] == 3600
+    finally:
+        clear_registry_cache()
+        reset_settings_cache()

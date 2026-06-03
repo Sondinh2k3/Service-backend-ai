@@ -90,13 +90,3 @@ def test_ai_algorithm_validation_error(client):
 
     resp = client.post("/api/algorithm/ai", json=payload)
     assert resp.status_code == 422
-
-# def test_health(client):
-#     resp = client.get("/health")
-#     assert resp.status_code == 200
-#     assert resp.json()["status"] == "ok"
-
-
-# def test_ready(client):
-#     resp = client.get("/ready")
-#     assert resp.status_code in (200, 503)  # 503 OK nếu chưa có area ready

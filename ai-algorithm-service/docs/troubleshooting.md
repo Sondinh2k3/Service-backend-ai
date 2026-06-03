@@ -60,6 +60,7 @@ Common causes:
 
 - No active bundle.
 - Missing `policy.onnx`, `policy_meta.json`, or `network.json`.
+- Missing compiled real normalization for the requested `areaId`.
 - Active bundle points to wrong network.
 - Runtime cache has not reloaded yet.
 
@@ -112,6 +113,25 @@ Fix:
 - Add `crosses[].location` and `roads[].coordinates`.
 - Or verify legacy direction encoding.
 - Re-sync snapshot and recompile.
+
+### `INVALID_INPUT` says cycle length, yellow/red-clear, direction, or saturation flow is missing
+
+This usually means the request is compact but runtime could not hydrate static metadata.
+
+Check:
+
+```bash
+curl -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
+  http://localhost:8002/internal/sync/areas/1/real-normalization
+```
+
+Fix:
+
+- Ensure snapshot includes `cycles[].cycle_length`.
+- Ensure stages include `yellow` and `red_clear` or equivalent static fields.
+- Ensure roads include `number_of_lanes`, `length`, `speed_design`, `capacity_design`, and direction/GPS data.
+- Re-sync snapshot or call real-normalization recompile.
+- Clear runtime cache if the container was already serving stale config.
 
 ### Output phase ratio looks wrong
 

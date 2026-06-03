@@ -52,11 +52,11 @@ Core Controller chỉ nên gửi:
 | Nhóm | Field |
 |---|---|
 | Area/cross | `areaId`, `crossId` |
-| Cycle hiện tại | `cycleId`, `cycleLength` nếu controller muốn override/kiểm chứng |
+| Cycle hiện tại | `cycleId`; `cycleLength` chỉ gửi khi muốn override/legacy |
 | Stage hiện tại | `stageId`, `greenTime` hoặc `duration` |
 | Traffic demand | `roadId`, `averageSpeed`, `averageSpeedUnit`, `occupancySpace`, `queueLength`, `totalVehicle`, `windowSeconds`, `density` nếu có |
 
-Các field như `direction`, `toCrossId`, `saturationFlow`, `stageCode`, `oldId`, `yellow`, `redClear`, road coordinates, phase mapping được hydrate từ snapshot/bundle đã sync.
+Các field như `cycleLength`, `direction`, `toCrossId`, `saturationFlow`, `stageCode`, `oldId`, `yellow`, `redClear`, road coordinates được hydrate từ real normalization đã compile từ snapshot. Active runtime bundle cung cấp policy/model và có thể bổ sung phase mapping phục vụ model.
 
 ## 4. Runtime APIs
 
@@ -136,8 +136,8 @@ Payload gom:
 | Field | Source | Production note |
 |---|---|---|
 | `area` | DB management | Real area |
-| `areaCrosses` | DB management | Crosses thuoc area |
-| `crosses` | DB management | Nen co `location: "lat,lon"` |
+| `areaCrosses` | DB management | Crosses thuộc area |
+| `crosses` | DB management | Nên có `location: "lat,lon"` |
 | `roads` | DB management | Nên có `coordinates` từ `v_road_coordinate` |
 | `cycles` | DB management | Cycle thật |
 | `stages` | DB management | Stage thật |
@@ -149,7 +149,7 @@ Snapshot nên bao gồm các static field phục vụ runtime hydrate:
 - `stages[].stage_code`, `old_id`, `green`, `yellow`, `red_clear`, `min_green_time`, `max_green_time`.
 - `roads[].number_of_lanes`, `length`, `speed_design`, `capacity_design`.
 
-`simToReal` la mapping:
+`simToReal` là mapping:
 
 ```json
 {
@@ -171,8 +171,8 @@ X-Internal-API-Key: <key>
 
 Check:
 
-- Co `crosses`.
-- Moi cross co `direction_map`.
+- Có `crosses`.
+- Mỗi cross có `direction_map`.
 - `cycles` có `cycle_length` và stage static nếu runtime muốn dùng payload gọn.
 - `sim_to_real` đã có mapping explicit/confirmed.
 
@@ -190,7 +190,7 @@ Dùng khi snapshot đã sửa và cần compile lại.
 | Endpoint | Purpose |
 |---|---|
 | `GET /ops/auto-sync/status` | Kiểm tra listener/poller |
-| `POST /ops/auto-sync/scan-now` | Scan MinIO thu cong |
+| `POST /ops/auto-sync/scan-now` | Scan MinIO thủ công |
 | `POST /ops/sim-bundles/pull` | Pull sim bundle và compose runtime bundle |
 | `GET /ops/bundles` | List bundle |
 | `GET /ops/networks/{network_id}/active` | Xem active bundle |
@@ -213,17 +213,17 @@ Before go-live bundle:
 
 - Real snapshot có topology đầy đủ.
 - `simToReal` đã confirm.
-- `real_normalization.json` co `direction_map`.
+- Real normalization có `direction_map`, `cycle_length`, stage `yellow/red_clear`, road static.
 - `compatibility_report.json` không có error.
 - Không có warning `AUTO_CROSS_MAPPING_BY_ORDER`.
 - Manual activate nếu production đặt `SIM_BUNDLE_AUTO_ACTIVATE=false`.
 
 During operation:
 
-- Moi request co `X-Request-Id`.
-- Log input/output AI de audit.
+- Mỗi request có `X-Request-Id`.
+- Log input/output AI để audit.
 - Nếu AI lỗi, TSC vẫn có plan fixed-time.
-- Alert khi latency, fallback rate, drift, guardrail violations tang.
+- Alert khi latency, fallback rate, drift, guardrail violations tăng.
 
 ## 8. Common mistakes
 

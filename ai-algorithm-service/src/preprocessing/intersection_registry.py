@@ -7,6 +7,13 @@ Cấu trúc thư mục (area-scoped):
     <model_dir>/area_<areaId>/network.json        # neighbor graph giữa các cross
     <model_dir>/area_<areaId>/intersections/cross_<crossId>.json
 
+Config load order for runtime:
+1. real_normalization/area_<areaId>/intersections/cross_<crossId>.json
+   is the source of truth for real topology/static runtime metadata after
+   `PUT /internal/sync/areas/{id}/real-network`.
+2. active runtime bundle config can contribute model-specific phase mapping.
+3. legacy area_<areaId>/intersections config remains as a development fallback.
+
 Per-cross config (auto-gen lần đầu, cache disk):
 {
   "cross_id": 123,
@@ -123,6 +130,10 @@ def area_dir(area_id: int) -> Path:
     return models_root() / f"area_{area_id}"
 
 
+def real_normalization_area_dir(area_id: int) -> Path:
+    return models_root() / "real_normalization" / f"area_{area_id}"
+
+
 def _bundle_root_for_area(area_id: int) -> Optional[Path]:
     """Path bundle hien tai cua area neu co (uu tien hon legacy)."""
     try:
@@ -141,13 +152,110 @@ def bundle_root_for_area(area_id: int) -> Optional[Path]:
     return _bundle_root_for_area(area_id)
 
 
-def _config_path(area_id: int, cross_id: int) -> Path:
+def _bundle_config_path(area_id: int, cross_id: int) -> Optional[Path]:
     bundle = _bundle_root_for_area(area_id)
     if bundle is not None:
         candidate = bundle / "intersections" / f"cross_{cross_id}.json"
         if candidate.exists():
             return candidate
+    return None
+
+
+def _real_normalization_config_path(area_id: int, cross_id: int) -> Path:
+    return real_normalization_area_dir(area_id) / "intersections" / f"cross_{cross_id}.json"
+
+
+def _legacy_config_path(area_id: int, cross_id: int) -> Path:
     return area_dir(area_id) / "intersections" / f"cross_{cross_id}.json"
+
+
+def _load_config_file(path: Path) -> Optional[IntersectionConfig]:
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return IntersectionConfig.from_dict(data)
+    except Exception as e:
+        logger.error(f"Lỗi load config {path}: {e}")
+        return None
+
+
+def _merge_cycle_metadata(
+    *,
+    real_cycles: Optional[Dict[str, dict]],
+    bundle_cycles: Optional[Dict[str, dict]],
+) -> Optional[Dict[str, dict]]:
+    """Merge snapshot static metadata with bundle phase mapping.
+
+    `real_normalization` is the source of truth for runtime static fields
+    (cycle length, yellow/red-clear, stage metadata). The active bundle may
+    carry a more precise sim->standard phase mapping; keep that mapping when
+    it exists so model semantics remain tied to the uploaded bundle.
+    """
+    if not real_cycles and not bundle_cycles:
+        return None
+    merged: Dict[str, dict] = {}
+    for cid, real_meta in (real_cycles or {}).items():
+        item = dict(real_meta or {})
+        bundle_meta = (bundle_cycles or {}).get(str(cid)) or {}
+        for key in ("stage_to_standard_phase", "standard_phase_to_stage"):
+            if bundle_meta.get(key):
+                item[key] = dict(bundle_meta[key])
+        if bundle_meta.get("is_primary") is not None:
+            item["is_primary"] = bool(bundle_meta["is_primary"])
+        merged[str(cid)] = item
+
+    # Preserve bundle-only cycles as a fallback for older snapshots.
+    for cid, bundle_meta in (bundle_cycles or {}).items():
+        merged.setdefault(str(cid), dict(bundle_meta or {}))
+    return merged
+
+
+def _mapping_source(
+    *,
+    bundle_cfg: Optional[IntersectionConfig],
+    legacy_cfg: Optional[IntersectionConfig],
+) -> Optional[IntersectionConfig]:
+    """Pick the best non-snapshot source for model/legacy mapping metadata."""
+    return bundle_cfg or legacy_cfg
+
+
+def _merge_config_sources(
+    *,
+    real_cfg: Optional[IntersectionConfig],
+    bundle_cfg: Optional[IntersectionConfig],
+    legacy_cfg: Optional[IntersectionConfig],
+) -> Optional[IntersectionConfig]:
+    base = real_cfg or bundle_cfg or legacy_cfg
+    if base is None:
+        return None
+    if real_cfg is None:
+        return base
+
+    mapping_source = _mapping_source(bundle_cfg=bundle_cfg, legacy_cfg=legacy_cfg)
+    return IntersectionConfig(
+        cross_id=real_cfg.cross_id,
+        direction_map=real_cfg.direction_map or (mapping_source.direction_map if mapping_source else {}),
+        phase_mapping=(
+            mapping_source.phase_mapping
+            if mapping_source is not None and mapping_source.phase_mapping is not None
+            else real_cfg.phase_mapping
+        ),
+        observation_mask=real_cfg.observation_mask or (
+            mapping_source.observation_mask if mapping_source else None
+        ),
+        primary_cycle_id=real_cfg.primary_cycle_id or (
+            mapping_source.primary_cycle_id if mapping_source else None
+        ),
+        cycles=_merge_cycle_metadata(
+            real_cycles=real_cfg.cycles,
+            bundle_cycles=mapping_source.cycles if mapping_source else None,
+        ),
+        roads_static=real_cfg.roads_static or (
+            mapping_source.roads_static if mapping_source else None
+        ),
+    )
 
 
 def get_config(area_id: int, cross_id: int) -> Optional[IntersectionConfig]:
@@ -155,29 +263,31 @@ def get_config(area_id: int, cross_id: int) -> Optional[IntersectionConfig]:
     if key in _cache:
         return _cache[key]
 
-    path = _config_path(area_id, cross_id)
-    if not path.exists():
-        _cache[key] = None
-        return None
+    real_cfg = _load_config_file(_real_normalization_config_path(area_id, cross_id))
+    bundle_path = _bundle_config_path(area_id, cross_id)
+    bundle_cfg = _load_config_file(bundle_path) if bundle_path is not None else None
+    legacy_cfg = _load_config_file(_legacy_config_path(area_id, cross_id))
 
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        cfg = IntersectionConfig.from_dict(data)
-        _cache[key] = cfg
-        return cfg
-    except Exception as e:
-        logger.error(f"Lỗi load config {path}: {e}")
-        _cache[key] = None
-        return None
+    cfg = _merge_config_sources(
+        real_cfg=real_cfg,
+        bundle_cfg=bundle_cfg,
+        legacy_cfg=legacy_cfg,
+    )
+    _cache[key] = cfg
+    return cfg
 
 
 def save_config(area_id: int, cfg: IntersectionConfig) -> Path:
-    path = _config_path(area_id, cfg.cross_id)
+    """Persist a legacy/manual cross config.
+
+    Do not cache `cfg` directly: runtime config may need to merge this legacy
+    mapping with a newer real_normalization snapshot on the next read.
+    """
+    path = _legacy_config_path(area_id, cfg.cross_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(cfg.to_dict(), f, ensure_ascii=False, indent=2)
-    _cache[(area_id, cfg.cross_id)] = cfg
+    _cache.pop((area_id, cfg.cross_id), None)
     artifact_storage.upload_local_file(path)
     logger.info(f"Đã ghi intersection config area={area_id} cross={cfg.cross_id} tại {path}")
     return path
@@ -193,6 +303,14 @@ def clear_cache(area_id: Optional[int] = None) -> None:
 
 
 def load_network(area_id: int) -> Optional[dict]:
+    path = real_normalization_area_dir(area_id) / "network.json"
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Lỗi load real_normalization network {path}: {e}")
+
     bundle = _bundle_root_for_area(area_id)
     if bundle is not None:
         path = bundle / "network.json"

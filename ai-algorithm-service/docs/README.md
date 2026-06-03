@@ -27,6 +27,8 @@ Training sim bundle -> Real network snapshot -> Runtime bundle -> Inference
 - Mỗi request runtime nên có `X-Request-Id` để audit input/output.
 - Real topology lấy từ DB management: `area`, `areaCrosses`, `crosses`, `roads`, `cycles`, `stages`.
 - `simToReal` không có sẵn trong DB management. Đây là mapping overlay sim/training ID -> real DB cross ID, phải được operator/integration team confirm.
+- Snapshot sau khi sync sẽ được compile vào `models/real_normalization/area_<area_id>/`; runtime dùng dữ liệu này để hydrate `cycleLength`, `yellow/redClear`, road static và direction.
+- Inference production nên dùng compact payload: chỉ gửi trạng thái đèn hiện tại và nhu cầu giao thông, không gửi lại topology mỗi chu kỳ.
 - Production không activate runtime bundle nếu `compatibility_report.json` có warning `AUTO_CROSS_MAPPING_BY_ORDER`.
 - Production nên đặt `SIM_BUNDLE_AUTO_ACTIVATE=false` để review compatibility report trước khi go-live.
 

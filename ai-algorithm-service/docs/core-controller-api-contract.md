@@ -2,6 +2,8 @@
 
 Tài liệu này dành cho đội tích hợp Core Controller. Mục tiêu là implement runtime call an toàn và sync topology đúng cho production.
 
+Nếu chỉ cần contract tích hợp hai API chính, đọc bản tập trung tại [core-controller-integration-api.md](core-controller-integration-api.md). File hiện tại giữ vai trò tài liệu mở rộng cho các endpoint runtime/ops khác.
+
 ## 1. AI Service endpoints
 
 Hai endpoint dưới đây đều thuộc **AI Algorithm Service backend**. Core Controller không chạy `ai-runtime`; Core Controller chỉ gọi API runtime do AI Service expose ra.
@@ -54,7 +56,7 @@ Core Controller chỉ nên gửi:
 | Area/cross | `areaId`, `crossId` |
 | Cycle hiện tại | `cycleId`; `cycleLength` chỉ gửi khi muốn override/legacy |
 | Stage hiện tại | `stageId`, `greenTime` hoặc `duration` |
-| Traffic demand | `roadId`, `averageSpeed`, `averageSpeedUnit`, `occupancySpace`, `queueLength`, `totalVehicle`, `windowSeconds`, `density` nếu có |
+| Traffic demand | `roadId`, `averageSpeed` mặc định `km/h`, `occupancySpace`, `queueLength`, `totalVehicle`, `windowSeconds`, `density` nếu có |
 
 Các field như `cycleLength`, `direction`, `toCrossId`, `saturationFlow`, `stageCode`, `oldId`, `yellow`, `redClear`, road coordinates được hydrate từ real normalization đã compile từ snapshot. Active runtime bundle cung cấp policy/model và có thể bổ sung phase mapping phục vụ model.
 

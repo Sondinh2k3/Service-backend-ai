@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     active_pointer_ttl_seconds: float = 2.0
 
     # ----- Guardrails (Lop 4 — Safety Layer)
+    # Runtime green-time defaults owned by AI Service. Core Controller does not
+    # need to send these values in inference requests.
+    runtime_min_green: int = 10
+    runtime_max_green: int = 60
+    runtime_green_time_step: int = 5
+
     guardrail_enabled: bool = True
     guardrail_min_green: int = 10
     guardrail_max_green: int = 90

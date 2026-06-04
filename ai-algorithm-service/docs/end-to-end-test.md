@@ -150,7 +150,6 @@ curl -X POST http://localhost:8001/api/algorithm/ai \
             "occupancySpace": 0,
             "totalVehicle": 0,
             "windowSeconds": 60,
-            "averageSpeedUnit": "m/s",
             "queueLength": 0,
             "density": 0
           }

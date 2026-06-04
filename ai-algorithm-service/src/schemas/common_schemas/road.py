@@ -24,7 +24,7 @@ class Road(BaseModel):
     )
     averageSpeed: float = Field(
         ge=0,
-        description="Average speed of vehicles on this road (unit in averageSpeedUnit, default m/s)"
+        description="Average speed of vehicles on this road (unit in averageSpeedUnit, default km/h)"
     )
     occupancySpace: float = Field(
         ..., ge=0, le=100,
@@ -42,7 +42,7 @@ class Road(BaseModel):
     )
     averageSpeedUnit: str | None = Field(
         default=None,
-        description="Unit for averageSpeed: 'm/s' or 'km/h'. Defaults to 'm/s' if omitted."
+        description="Unit for averageSpeed: 'm/s' or 'km/h'. Defaults to 'km/h' if omitted."
     )
     queueLength: float | None = Field(
         default=None,

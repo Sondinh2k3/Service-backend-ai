@@ -12,7 +12,8 @@ Training sim bundle -> Real network snapshot -> Runtime bundle -> Inference
 |---|---|
 | Mới onboard | [PIPELINE.md](PIPELINE.md), sau đó [architecture.md](architecture.md) |
 | Chạy demo end-to-end local | [end-to-end-test.md](end-to-end-test.md) |
-| Viết Core Controller gọi AI Service | [core-controller-api-contract.md](core-controller-api-contract.md), [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md) |
+| Viết Core Controller gọi AI Service | [core-controller-integration-api.md](core-controller-integration-api.md), sau đó [core-controller-api-contract.md](core-controller-api-contract.md) nếu cần chi tiết mở rộng |
+| Tổ chức input Core Controller gửi sang AI Service | [core-controller-input-data.md](core-controller-input-data.md) |
 | Tra endpoint | [api-reference.md](api-reference.md) |
 | Deploy production | [deployment.md](deployment.md), [configuration.md](configuration.md), [auto-sync.md](auto-sync.md) |
 | Debug lỗi | [troubleshooting.md](troubleshooting.md) |
@@ -37,7 +38,9 @@ Training sim bundle -> Real network snapshot -> Runtime bundle -> Inference
 ### Integrator / Core Controller
 
 ```text
-core-controller-api-contract.md
+core-controller-integration-api.md
+  -> core-controller-input-data.md
+  -> core-controller-api-contract.md
   -> ../api_docs/run_ai_algorithm.md
   -> integration-real-controller.md
   -> troubleshooting.md

@@ -143,14 +143,14 @@ def build_lane_features(
                 occ_norm = np.clip(occ_raw / 100.0, 0.0, 1.0)
 
             spd_raw = float(road.averageSpeed)
-            spd_unit = (road.averageSpeedUnit or "m/s").lower()
+            spd_unit = (road.averageSpeedUnit or "km/h").lower()
             if spd_unit not in {"m/s", "km/h", "kmh"}:
                 logger.warning(
-                    "[input] averageSpeedUnit=%s invalid for road=%s, defaulting to m/s",
+                    "[input] averageSpeedUnit=%s invalid for road=%s, defaulting to km/h",
                     spd_unit,
                     road.id,
                 )
-                spd_unit = "m/s"
+                spd_unit = "km/h"
 
             if 0.0 <= spd_raw <= 1.5 and spd_unit == "m/s":
                 spd_norm = np.clip(spd_raw, 0.0, 1.0)

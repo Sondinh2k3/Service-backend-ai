@@ -66,10 +66,10 @@ LANE_FEATURE_DIM = TOTAL_LANES * 4  # 48
 
 class AIService:
     def __init__(self, ai_input: AIInput):
-        self.yellow_time = ai_input.yellowTime
-        self.min_green = ai_input.minGreen
-        self.max_green = ai_input.maxGreen
-        self.green_time_step = ai_input.greenTimeStep
+        settings = get_settings()
+        self.min_green = settings.runtime_min_green
+        self.max_green = settings.runtime_max_green
+        self.green_time_step = settings.runtime_green_time_step
 
     def run(self, ai_input: AIInput, *, request_id: str = "") -> AIOutput:
         crosses = self._hydrate_runtime_crosses(ai_input)

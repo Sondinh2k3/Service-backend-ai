@@ -8,7 +8,7 @@
       "stages": [
         {
           "stageId": 89501,
-          "greenTime": 49
+          "greenTime": 41
         },
         {
           "stageId": 89502,
@@ -27,7 +27,6 @@
         {
           "roadId": 700015,
           "averageSpeed": 8.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 80.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -36,7 +35,6 @@
         {
           "roadId": 700014,
           "averageSpeed": 34.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 15.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -45,7 +43,6 @@
         {
           "roadId": 700017,
           "averageSpeed": 9.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 74.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -54,7 +51,6 @@
         {
           "roadId": 700018,
           "averageSpeed": 45.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 19.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -68,18 +64,17 @@
       "stages": [
         {
           "stageId": 89401,
-          "greenTime": 41
+          "greenTime": 42
         },
         {
           "stageId": 89402,
-          "greenTime": 41
+          "greenTime": 42
         }
       ],
       "roads": [
         {
           "roadId": 700011,
           "averageSpeed": 32.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 30.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -88,7 +83,6 @@
         {
           "roadId": 700003,
           "averageSpeed": 11.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 82.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -97,7 +91,6 @@
         {
           "roadId": 700013,
           "averageSpeed": 33.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 28.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -106,7 +99,6 @@
         {
           "roadId": 700023,
           "averageSpeed": 21.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 58.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -120,18 +112,17 @@
       "stages": [
         {
           "stageId": 89101,
-          "greenTime": 41
+          "greenTime": 40
         },
         {
           "stageId": 89102,
-          "greenTime": 41
+          "greenTime": 40
         }
       ],
       "roads": [
         {
           "roadId": 700001,
           "averageSpeed": 28.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 40.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -140,7 +131,6 @@
         {
           "roadId": 700002,
           "averageSpeed": 8.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 90.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -149,7 +139,6 @@
         {
           "roadId": 700012,
           "averageSpeed": 23.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 53.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -178,7 +167,6 @@
         {
           "roadId": 700004,
           "averageSpeed": 12.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 84.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -187,7 +175,6 @@
         {
           "roadId": 700005,
           "averageSpeed": 28.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 38.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -196,7 +183,6 @@
         {
           "roadId": 700006,
           "averageSpeed": 26.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 42.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -210,7 +196,7 @@
       "stages": [
         {
           "stageId": 89301,
-          "greenTime": 29
+          "greenTime": 27
         },
         {
           "stageId": 89302,
@@ -218,7 +204,7 @@
         },
         {
           "stageId": 89303,
-          "greenTime": 29
+          "greenTime": 27
         },
         {
           "stageId": 89304,
@@ -229,7 +215,6 @@
         {
           "roadId": 700007,
           "averageSpeed": 35.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 22.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -238,7 +223,6 @@
         {
           "roadId": 700008,
           "averageSpeed": 12.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 80.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -247,7 +231,6 @@
         {
           "roadId": 700009,
           "averageSpeed": 33.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 25.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -256,7 +239,6 @@
         {
           "roadId": 700019,
           "averageSpeed": 30.0,
-          "averageSpeedUnit": "km/h",
           "occupancySpace": 32.0,
           "totalVehicle": 0,
           "queueLength": 0,
@@ -264,8 +246,5 @@
         }
       ]
     }
-  ],
-  "minGreen": 10,
-  "maxGreen": 60,
-  "greenTimeStep": 5
+  ]
 }

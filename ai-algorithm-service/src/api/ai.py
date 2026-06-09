@@ -25,6 +25,7 @@ from src.preprocessing import (
     load_network,
     save_config,
 )
+from src.preprocessing.feature_builder import clear_cache as clear_feature_builder_cache
 from src.preprocessing.intersection_registry import clear_cache as clear_config_cache
 from src.schemas.ai_schemas.ai_input import AIInput
 from src.schemas.ai_schemas.ai_output import AIOutput
@@ -118,4 +119,5 @@ def clear_caches(area_id: int | None = Query(default=None)):
     """Xoa in-memory cache. Neu `area_id` co -> chi area do, else tat ca."""
     clear_config_cache(area_id)
     clear_policy_cache(area_id)
+    clear_feature_builder_cache(None)
     return {"status": "cleared", "areaId": area_id}

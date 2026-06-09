@@ -12,8 +12,8 @@ Training sim bundle -> Real network snapshot -> Runtime bundle -> Inference
 |---|---|
 | Mới onboard | [PIPELINE.md](PIPELINE.md), sau đó [architecture.md](architecture.md) |
 | Chạy demo end-to-end local | [end-to-end-test.md](end-to-end-test.md) |
-| Viết Core Controller gọi AI Service | [core-controller-integration-api.md](core-controller-integration-api.md), sau đó [core-controller-api-contract.md](core-controller-api-contract.md) nếu cần chi tiết mở rộng |
-| Tổ chức input Core Controller gửi sang AI Service | [core-controller-input-data.md](core-controller-input-data.md) |
+| Viết Core Controller gọi AI Service | [core-controller-api-contract.md](core-controller-api-contract.md), [../api_docs/run_ai_algorithm.md](../api_docs/run_ai_algorithm.md) |
+| Đăng ký real network snapshot | [real-network-registration.md](real-network-registration.md) |
 | Tra endpoint | [api-reference.md](api-reference.md) |
 | Deploy production | [deployment.md](deployment.md), [configuration.md](configuration.md), [auto-sync.md](auto-sync.md) |
 | Debug lỗi | [troubleshooting.md](troubleshooting.md) |
@@ -27,6 +27,7 @@ Training sim bundle -> Real network snapshot -> Runtime bundle -> Inference
 - `POST /api/algorithm/ai` nên có timeout 500 ms, retry tối đa 1 lần, và fallback fixed-time.
 - Mỗi request runtime nên có `X-Request-Id` để audit input/output.
 - Real topology lấy từ DB management: `area`, `areaCrosses`, `crosses`, `roads`, `cycles`, `stages`.
+- New integrations may send the compact nested real-network payload; the service flattens it internally before compiling runtime config.
 - `simToReal` không có sẵn trong DB management. Đây là mapping overlay sim/training ID -> real DB cross ID, phải được operator/integration team confirm.
 - Snapshot sau khi sync sẽ được compile vào `models/real_normalization/area_<area_id>/`; runtime dùng dữ liệu này để hydrate `cycleLength`, `yellow/redClear`, road static và direction.
 - Inference production nên dùng compact payload: chỉ gửi trạng thái đèn hiện tại và nhu cầu giao thông, không gửi lại topology mỗi chu kỳ.
@@ -42,6 +43,7 @@ core-controller-integration-api.md
   -> core-controller-input-data.md
   -> core-controller-api-contract.md
   -> ../api_docs/run_ai_algorithm.md
+  -> real-network-registration.md
   -> integration-real-controller.md
   -> troubleshooting.md
 ```

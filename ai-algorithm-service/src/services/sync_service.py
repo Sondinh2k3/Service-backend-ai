@@ -419,6 +419,12 @@ def sync_real_network_snapshot(
         clear_intersection_config_cache(area_id)
         compile_result = {"status": "ok", "outputDir": str(real_norm_dir)}
         logger.info(f"[sync] real_normalization eager-compiled -> {real_norm_dir}")
+        try:
+            from src.ops.lifecycle import _notify_runtime_reload
+
+            _notify_runtime_reload(effective_network_id, run_preflight=False)
+        except Exception as e:
+            logger.warning(f"[sync] notify runtime reload fail area={area_id}: {e}")
     except Exception as e:
         compile_result = {"status": "failed", "reason": str(e)}
         logger.warning(f"[sync] eager-compile real_normalization fail area={area_id}: {e}")

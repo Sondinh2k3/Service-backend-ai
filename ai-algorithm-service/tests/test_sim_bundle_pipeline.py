@@ -224,6 +224,97 @@ def test_real_network_snapshot_accepts_snake_case_sim_to_real():
     assert body.simToReal == {"33202549": 101}
 
 
+def test_real_network_snapshot_accepts_nested_payload():
+    body = RealNetworkSnapshotSync.model_validate(
+        {
+            "sourceEventId": "evt-nested-1",
+            "tenantId": "default",
+            "networkId": "nested-net",
+            "schemaVersion": "real-network/v2",
+            "area": {"id": 1, "name": "Nested Area"},
+            "crosses": [
+                {
+                    "id": 101,
+                    "simId": "sim-101",
+                    "location": "21.0,105.0",
+                    "primaryCycleId": 1001,
+                    "roads": [
+                        {
+                            "id": 201,
+                            "direction": 1,
+                            "toCrossId": 102,
+                            "lanes": 2,
+                            "length": 120,
+                            "capacity": 3600,
+                            "speedDesign": 50,
+                            "coordinates": [[21.001, 105.0], [21.0, 105.0]],
+                        }
+                    ],
+                    "cycles": [
+                        {
+                            "id": 1001,
+                            "type": 0,
+                            "length": 90,
+                            "yellow": 3,
+                            "redClear": 1,
+                            "stages": [
+                                {
+                                    "id": 3001,
+                                    "order": 1,
+                                    "oldId": "0",
+                                    "green": 40,
+                                    "yellow": 3,
+                                    "redClear": 1,
+                                    "minGreen": 15,
+                                    "maxGreen": 90,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert body.area == {"id": 1, "name": "Nested Area", "area_id": 1, "area_name": "Nested Area"}
+    assert body.areaCrosses == [{"cross_id": 101, "area_id": 1, "cycle_id": 1001}]
+    assert body.crosses == [{"id": 101, "location": "21.0,105.0"}]
+    assert body.roads[0]["from_cross"] == 101
+    assert body.roads[0]["from_cross_direction"] == 1
+    assert body.roads[0]["to_cross"] == 102
+    assert body.roads[0]["number_of_lanes"] == 2
+    assert body.roads[0]["capacity_design"] == 3600
+    assert body.roads[0]["speed_design"] == 50
+    assert body.roads[0]["coordinates"] == [
+        {"order_number": 1, "latitude": 21.001, "longitude": 105.0},
+        {"order_number": 2, "latitude": 21.0, "longitude": 105.0},
+    ]
+    assert body.cycles == [
+        {
+            "id": 1001,
+            "cross_id": 101,
+            "cycle_type": 0,
+            "cycle_length": 90,
+            "yellow": 3,
+            "red_clear": 1,
+        }
+    ]
+    assert body.stages == [
+        {
+            "id": 3001,
+            "cycle_id": 1001,
+            "order_number": 1,
+            "old_id": "0",
+            "green": 40,
+            "yellow": 3,
+            "red_clear": 1,
+            "min_green_time": 15,
+            "max_green_time": 90,
+        }
+    ]
+    assert body.simToReal == {"sim-101": 101}
+
+
 def test_sync_real_network_rejects_sim_to_real_outside_snapshot():
     with pytest.raises(AlgorithmException) as exc:
         sync_real_network_snapshot(

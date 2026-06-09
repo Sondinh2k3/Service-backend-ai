@@ -14,6 +14,7 @@ from src.core.error_codes import ErrorCode
 from src.core.exception import AlgorithmException
 from src.core.logger import logger
 from src.observability import drift_registry
+from src.preprocessing.feature_builder import clear_cache as clear_feature_builder_cache
 from src.preprocessing.intersection_registry import clear_cache as clear_config_cache
 from src.runtime.bundle_resolver import invalidate_network
 from src.runtime.preflight import PreflightError, run_preflight
@@ -41,6 +42,7 @@ def reload_network(body: ReloadRequest):
     # Clear policy cache cho moi area cua network. Don gian: clear tat ca.
     clear_policy_cache(None)
     clear_config_cache(None)
+    clear_feature_builder_cache(None)
     # Reset drift detector — baseline cu khong con apply cho bundle moi.
     drift_registry.reset_detector(network_id)
 

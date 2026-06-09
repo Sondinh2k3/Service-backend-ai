@@ -92,7 +92,9 @@ Upsert area metadata.
 
 Sync real topology snapshot and compile real normalization.
 
-Production payload includes real topology from DB plus confirmed `simToReal` overlay:
+Production payload includes real topology from DB plus confirmed `simToReal` overlay.
+The service accepts both the flat v1 table-style shape and the compact nested
+v2 shape described in [real-network-registration.md](real-network-registration.md).
 
 ```json
 {

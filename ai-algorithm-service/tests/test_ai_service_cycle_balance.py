@@ -87,6 +87,19 @@ def test_signal_plan_balances_cycle_with_all_red():
     assert sum(p.greenTime for p in output.phases) == 82
 
 
+def test_signal_plan_output_is_compact_command():
+    output = _run_plan(_make_cross(cycle_length=90, red_clears=(1, 1)))
+    data = output.model_dump()
+
+    assert set(data) == {"crossId", "cycleId", "cycleLength", "phases"}
+    assert set(data["phases"][0]) == {
+        "stageId",
+        "greenTime",
+        "yellowTime",
+        "redClearTime",
+    }
+
+
 def test_signal_plan_balances_cycle_without_all_red():
     output = _run_plan(_make_cross(cycle_length=90, red_clears=(0, 0)))
 

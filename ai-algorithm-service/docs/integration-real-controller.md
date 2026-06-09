@@ -29,7 +29,7 @@ Core Controller must implement:
 Output validation should include:
 
 ```text
-status == 1
+commands contains every requested crossId
 sum(phase.greenTime + phase.yellowTime + phase.redClearTime) ~= cycleLength
 ```
 

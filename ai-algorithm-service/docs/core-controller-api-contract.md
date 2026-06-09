@@ -94,7 +94,7 @@ Core Controller action:
 
 | Result | Action |
 |---|---|
-| `200` + `status == 1` + plan valid | Push plan |
+| `200` + `commands` valid | Push plan |
 | Timeout | Retry 1 lần, sau đó fallback |
 | `4xx/5xx` | Fallback, log |
 | Response parse fail | Fallback, log raw body |

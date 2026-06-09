@@ -180,8 +180,8 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const json = pm.response.json();",
-                  "pm.test(\"5 intersections\", () => pm.expect(json.numIntersections).to.eql(5));",
-                  "pm.test(\"Has outputs\", () => pm.expect(json.algorithmOutputs.length).to.eql(5));"
+                  "const req = JSON.parse(pm.request.body.raw);",
+                  "pm.test(\"Has commands\", () => pm.expect(json.commands.length).to.eql(req.crosses.length));"
                 ]
               }
             }

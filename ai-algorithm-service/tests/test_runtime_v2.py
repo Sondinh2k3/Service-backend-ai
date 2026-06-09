@@ -199,6 +199,33 @@ def test_build_lane_features_default_builder_fallback():
     assert feats.shape == (4, TOTAL_LANES)
 
 
+def test_average_speed_defaults_to_kmh_when_unit_is_omitted():
+    cross = _make_cross()
+    cfg = _make_v2_config()
+    builder = FeatureBuilder(
+        spec=FeatureSpec(channels=("speed",), formulas={"speed": "speed"}),
+        roads_static={},
+    )
+
+    feats, _ = build_lane_features(cross, cfg, feature_builder=builder)
+
+    assert feats[0, 0] == pytest.approx(30.0)
+
+
+def test_average_speed_explicit_ms_is_converted_to_kmh():
+    cross = _make_cross()
+    cross.roads[0].averageSpeedUnit = "m/s"
+    cfg = _make_v2_config()
+    builder = FeatureBuilder(
+        spec=FeatureSpec(channels=("speed",), formulas={"speed": "speed"}),
+        roads_static={},
+    )
+
+    feats, _ = build_lane_features(cross, cfg, feature_builder=builder)
+
+    assert feats[0, 0] == pytest.approx(108.0)
+
+
 # ----------------------- FeatureBuilder unit ------------------------------
 
 

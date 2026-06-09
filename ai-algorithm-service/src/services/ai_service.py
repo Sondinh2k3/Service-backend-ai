@@ -175,10 +175,7 @@ class AIService:
         record_inference_metric(role="runtime", status="ok", latency_ms=latency_ms)
 
         return AIOutput(
-            status=1,
-            numIntersections=len(crosses),
-            areaIds=sorted(groups.keys()),
-            algorithmOutputs=[o for o in outputs if o is not None],
+            commands=[o for o in outputs if o is not None],
         )
 
     def _hydrate_runtime_crosses(self, ai_input: AIInput) -> List[Cross]:
@@ -704,8 +701,6 @@ class AIService:
             green_time = int(final_green_times_arr[idx])
             output_stages.append(StageOutput(
                 stageId=stage.id,
-                stageCode=stage.stageCode,
-                oldId=stage.oldId,
                 greenTime=max(1, green_time),
                 yellowTime=stage.yellow,
                 redClearTime=stage.redClear,
@@ -713,12 +708,9 @@ class AIService:
 
         return (
             AlgorithmOutput(
-                cycleLength=cycle_length,
                 crossId=cross.id,
-                areaId=area_id,
-                crossName=getattr(cross.cycle, "crossName", None),
                 cycleId=cross.cycle.id if hasattr(cross.cycle, "id") else None,
-                createdDate=cross.cycle.createdDate if hasattr(cross.cycle, "createdDate") else None,
+                cycleLength=cycle_length,
                 phases=output_stages,
             ),
             report.triggered,

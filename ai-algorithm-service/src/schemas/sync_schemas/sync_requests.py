@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.schemas.sync_schemas.real_network_adapter import flatten_nested_real_network
+
 
 class AreaUpsert(BaseModel):
     sourceEventId: str = Field(..., min_length=1, max_length=128)
@@ -76,10 +78,12 @@ class RealNetworkSnapshotSync(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _accept_snake_case_overlay(cls, data):
-        """Accept both API-facing camelCase and service-internal snake_case."""
+        """Accept flat v1 and compact nested payloads."""
         if isinstance(data, dict) and "simToReal" not in data and "sim_to_real" in data:
             data = dict(data)
             data["simToReal"] = data["sim_to_real"]
+        if isinstance(data, dict):
+            data = flatten_nested_real_network(data)
         return data
 
 

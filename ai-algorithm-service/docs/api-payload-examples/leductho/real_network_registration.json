@@ -1,0 +1,514 @@
+{
+  "sourceEventId": "evt-real-network-leductho-test-20260607",
+  "tenantId": "default",
+  "networkId": "leductho",
+  "area": {
+    "area_id": 1308701,
+    "area_name": "Le Duc Tho Corridor (Test RL)",
+    "is_active": 1
+  },
+  "areaCrosses": [
+    {
+      "area_id": 1308701,
+      "cross_id": 33000000201001,
+      "cycle_id": 2001,
+      "is_active": 1
+    },
+    {
+      "area_id": 1308701,
+      "cross_id": 33000000201002,
+      "cycle_id": 2002,
+      "is_active": 1
+    },
+    {
+      "area_id": 1308701,
+      "cross_id": 33000000201003,
+      "cycle_id": 2003,
+      "is_active": 1
+    }
+  ],
+  "crosses": [
+    {
+      "id": 33000000201001,
+      "is_active": 1,
+      "location": "21.038294,105.772069",
+      "old_id": "cluster10123839429_1312668863_1312668913_1720251781_#8more"
+    },
+    {
+      "id": 33000000201002,
+      "is_active": 1,
+      "location": "21.027966,105.768362",
+      "old_id": "cluster10222796214_cluster10222796210_10222796211_10222796215_10222808620_#5more"
+    },
+    {
+      "id": 33000000201003,
+      "is_active": 1,
+      "location": "21.03341,105.769837",
+      "old_id": "cluster1312668928_1312668940_1720251725_1720251748_#8more"
+    }
+  ],
+  "roads": [
+    {
+      "id": 710001,
+      "is_active": 1,
+      "from_cross": 33000000201001,
+      "from_cross_direction": 1,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 14,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.039016,
+          "longitude": 105.772072
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.038294,
+          "longitude": 105.772069
+        }
+      ]
+    },
+    {
+      "id": 710002,
+      "is_active": 1,
+      "from_cross": 33000000201001,
+      "from_cross_direction": 2,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 431,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.038275,
+          "longitude": 105.776216
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.038294,
+          "longitude": 105.772069
+        }
+      ]
+    },
+    {
+      "id": 710003,
+      "is_active": 1,
+      "from_cross": 33000000201001,
+      "from_cross_direction": 3,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 16,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.037571,
+          "longitude": 105.772065
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.038294,
+          "longitude": 105.772069
+        }
+      ]
+    },
+    {
+      "id": 710004,
+      "is_active": 1,
+      "from_cross": 33000000201001,
+      "from_cross_direction": 4,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 15,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.038297,
+          "longitude": 105.771299
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.038294,
+          "longitude": 105.772069
+        }
+      ]
+    },
+    {
+      "id": 710005,
+      "is_active": 1,
+      "from_cross": 33000000201002,
+      "from_cross_direction": 1,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 12,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.028688,
+          "longitude": 105.768366
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.027966,
+          "longitude": 105.768362
+        }
+      ]
+    },
+    {
+      "id": 710006,
+      "is_active": 1,
+      "from_cross": 33000000201002,
+      "from_cross_direction": 2,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 24,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.027962,
+          "longitude": 105.769132
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.027966,
+          "longitude": 105.768362
+        }
+      ]
+    },
+    {
+      "id": 710007,
+      "is_active": 1,
+      "from_cross": 33000000201002,
+      "from_cross_direction": 3,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 20,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.027243,
+          "longitude": 105.768359
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.027966,
+          "longitude": 105.768362
+        }
+      ]
+    },
+    {
+      "id": 710008,
+      "is_active": 1,
+      "from_cross": 33000000201002,
+      "from_cross_direction": 4,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 19,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.027969,
+          "longitude": 105.767592
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.027966,
+          "longitude": 105.768362
+        }
+      ]
+    },
+    {
+      "id": 710009,
+      "is_active": 1,
+      "from_cross": 33000000201003,
+      "from_cross_direction": 1,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 11,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.034132,
+          "longitude": 105.76984
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.03341,
+          "longitude": 105.769837
+        }
+      ]
+    },
+    {
+      "id": 710010,
+      "is_active": 1,
+      "from_cross": 33000000201003,
+      "from_cross_direction": 2,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 11,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.033406,
+          "longitude": 105.770607
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.03341,
+          "longitude": 105.769837
+        }
+      ]
+    },
+    {
+      "id": 710011,
+      "is_active": 1,
+      "from_cross": 33000000201003,
+      "from_cross_direction": 3,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 3,
+      "length": 11,
+      "capacity_design": 5400,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.032687,
+          "longitude": 105.769833
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.03341,
+          "longitude": 105.769837
+        }
+      ]
+    },
+    {
+      "id": 710012,
+      "is_active": 1,
+      "from_cross": 33000000201003,
+      "from_cross_direction": 4,
+      "to_cross": null,
+      "to_cross_direction": null,
+      "number_of_lanes": 4,
+      "length": 8,
+      "capacity_design": 7200,
+      "speed_design": 50,
+      "coordinates": [
+        {
+          "order_number": 1,
+          "latitude": 21.033413,
+          "longitude": 105.769067
+        },
+        {
+          "order_number": 2,
+          "latitude": 21.03341,
+          "longitude": 105.769837
+        }
+      ]
+    }
+  ],
+  "cycles": [
+    {
+      "id": 2001,
+      "is_active": 1,
+      "cross_id": 33000000201001,
+      "red_clear": 1,
+      "yellow": 3,
+      "number_of_stages": 3,
+      "cycle_type": 0,
+      "cycle_length": 138,
+      "old_id": "cluster10123839429_1312668863_1312668913_1720251781_#8more-CK"
+    },
+    {
+      "id": 2002,
+      "is_active": 1,
+      "cross_id": 33000000201002,
+      "red_clear": 1,
+      "yellow": 3,
+      "number_of_stages": 4,
+      "cycle_type": 0,
+      "cycle_length": 134,
+      "old_id": "cluster10222796214_cluster10222796210_10222796211_10222796215_10222808620_#5more-CK"
+    },
+    {
+      "id": 2003,
+      "is_active": 1,
+      "cross_id": 33000000201003,
+      "red_clear": 1,
+      "yellow": 3,
+      "number_of_stages": 4,
+      "cycle_type": 0,
+      "cycle_length": 134,
+      "old_id": "cluster1312668928_1312668940_1720251725_1720251748_#8more-CK"
+    }
+  ],
+  "stages": [
+    {
+      "id": 99101,
+      "is_active": 1,
+      "order_number": 1,
+      "cycle_id": 2001,
+      "old_id": "0",
+      "green": 65,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99102,
+      "is_active": 1,
+      "order_number": 2,
+      "cycle_id": 2001,
+      "old_id": "3",
+      "green": 40,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99103,
+      "is_active": 1,
+      "order_number": 3,
+      "cycle_id": 2001,
+      "old_id": "6",
+      "green": 33,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99201,
+      "is_active": 1,
+      "order_number": 1,
+      "cycle_id": 2002,
+      "old_id": "0",
+      "green": 40,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99202,
+      "is_active": 1,
+      "order_number": 2,
+      "cycle_id": 2002,
+      "old_id": "3",
+      "green": 27,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99203,
+      "is_active": 1,
+      "order_number": 3,
+      "cycle_id": 2002,
+      "old_id": "6",
+      "green": 40,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99204,
+      "is_active": 1,
+      "order_number": 4,
+      "cycle_id": 2002,
+      "old_id": "9",
+      "green": 27,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99301,
+      "is_active": 1,
+      "order_number": 1,
+      "cycle_id": 2003,
+      "old_id": "0",
+      "green": 40,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99302,
+      "is_active": 1,
+      "order_number": 2,
+      "cycle_id": 2003,
+      "old_id": "3",
+      "green": 27,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99303,
+      "is_active": 1,
+      "order_number": 3,
+      "cycle_id": 2003,
+      "old_id": "6",
+      "green": 40,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    },
+    {
+      "id": 99304,
+      "is_active": 1,
+      "order_number": 4,
+      "cycle_id": 2003,
+      "old_id": "9",
+      "green": 27,
+      "yellow": 3,
+      "red_clear": 1,
+      "min_green_time": 15,
+      "max_green_time": 90
+    }
+  ],
+  "simToReal": {
+    "cluster10123839429_1312668863_1312668913_1720251781_#8more": 33000000201001,
+    "cluster10222796214_cluster10222796210_10222796211_10222796215_10222808620_#5more": 33000000201002,
+    "cluster1312668928_1312668940_1720251725_1720251748_#8more": 33000000201003
+  }
+}

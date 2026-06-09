@@ -104,7 +104,7 @@ Nếu một nút có all-red thì snapshot/stage hoặc request phải có `redC
 |---|---|---:|---|
 | `roadId` hoặc `id` | integer | yes | Real road ID đã có trong snapshot |
 | `averageSpeed` | number | yes | Tốc độ trung bình |
-| `averageSpeedUnit` | string | strongly recommended | `m/s` hoặc `km/h`. Nếu bỏ, service mặc định `m/s` |
+| `averageSpeedUnit` | string | optional | `m/s` hoặc `km/h`. Nếu bỏ, service mặc định `km/h` |
 | `occupancySpace` | number | yes | Occupancy 0-100 hoặc 0-1 |
 | `queueLength` | number/null | recommended | Mét hoặc normalized 0-1 |
 | `totalVehicle` | integer/null | recommended | Số xe trong window |
@@ -140,22 +140,14 @@ Legacy phù hợp cho demo hoặc khi chưa có snapshot/bundle đầy đủ. Pr
 
 ```json
 {
-  "status": 1,
-  "numIntersections": 1,
-  "areaIds": [1],
-  "algorithmOutputs": [
+  "commands": [
     {
       "crossId": 1001,
-      "areaId": 1,
-      "crossName": "Cross 1001",
       "cycleId": 10,
       "cycleLength": 90,
-      "createdDate": "2026-06-02T10:00:00+07:00",
       "phases": [
         {
           "stageId": 1,
-          "stageCode": "S1",
-          "oldId": "1",
           "greenTime": 41,
           "yellowTime": 3,
           "redClearTime": 1
@@ -172,8 +164,7 @@ Core Controller phải validate:
 
 - HTTP status là `200`.
 - Body parse được JSON.
-- `status == 1`.
-- Tất cả `crossId` trong request có output tương ứng.
+- `commands` là array và có command cho tất cả `crossId` trong request.
 - Stage/cycle IDs hợp với topology hiện tại.
 - Tổng duration mỗi cycle xấp xỉ `cycleLength`:
 

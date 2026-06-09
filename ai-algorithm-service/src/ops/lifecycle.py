@@ -708,7 +708,7 @@ def _cleanup_path(p: Path) -> None:
         logger.warning(f"Cleanup failed {p}: {e}")
 
 
-def _notify_runtime_reload(network_id: str) -> None:
+def _notify_runtime_reload(network_id: str, *, run_preflight: bool = True) -> None:
     """Goi ai-runtime hot-reload qua HTTP (best effort)."""
     settings = get_settings()
     url_base = settings.runtime_internal_url
@@ -717,6 +717,14 @@ def _notify_runtime_reload(network_id: str) -> None:
     try:
         import httpx  # type: ignore
         endpoint = url_base.rstrip("/") + "/internal/runtime/reload"
-        httpx.post(endpoint, json={"network_id": network_id}, timeout=2.0)
+        headers = {}
+        if settings.internal_api_key:
+            headers[settings.internal_api_key_header] = settings.internal_api_key
+        httpx.post(
+            endpoint,
+            json={"network_id": network_id, "runPreflight": run_preflight},
+            headers=headers,
+            timeout=2.0,
+        )
     except Exception as e:
         logger.warning(f"[ops] notify runtime reload failed: {e}")

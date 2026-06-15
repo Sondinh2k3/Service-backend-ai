@@ -27,6 +27,7 @@ from src.core.auth import require_internal_api_key
 from src.core.config import get_settings
 from src.core.error_codes import ErrorCode
 from src.core.exception import AlgorithmException
+from src.core.structured_logging import log_event
 from src.db import repositories as repo
 from src.db.base import get_session
 from src.ops import lifecycle
@@ -126,19 +127,55 @@ def get_bundle(bundle_id: str):
 @router.post("/bundles/pull")
 def pull_bundle(body: PullBundleRequest, request: Request):
     request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.bundle.pull_started",
+        request_id=request_id,
+        status="started",
+        source_uri=body.sourceUri,
+        activate=body.activate,
+    )
     try:
         bundle = lifecycle.pull_and_register_bundle(
             source_uri=body.sourceUri,
             request_id=request_id,
         )
     except lifecycle.BundleLifecycleError as e:
+        log_event(
+            "ops.bundle.pull_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            source_uri=body.sourceUri,
+            error_code=ErrorCode.INVALID_INPUT.value,
+            error_type=type(e).__name__,
+        )
         raise AlgorithmException(
             str(e), code=ErrorCode.INVALID_INPUT
         ) from e
 
     response = {"status": "validated", "bundle": _bundle_to_dict(bundle)}
+    log_event(
+        "ops.bundle.pull_completed",
+        request_id=request_id,
+        status="completed",
+        source_uri=body.sourceUri,
+        bundle_id=bundle.bundle_id,
+        bundle_kind=getattr(bundle, "bundle_kind", "runtime"),
+        tenant_id=bundle.tenant_id,
+        network_id=bundle.network_id,
+        area_id=bundle.area_id,
+    )
     if body.activate:
         bundle = lifecycle.activate_bundle(bundle.bundle_id, request_id=request_id)
+        log_event(
+            "ops.bundle.activate_completed",
+            request_id=request_id,
+            status="completed",
+            bundle_id=bundle.bundle_id,
+            tenant_id=bundle.tenant_id,
+            network_id=bundle.network_id,
+            area_id=bundle.area_id,
+        )
         response["status"] = "activated"
         response["bundle"] = _bundle_to_dict(bundle)
     return response
@@ -147,6 +184,13 @@ def pull_bundle(body: PullBundleRequest, request: Request):
 @router.post("/sim-bundles/pull")
 def pull_sim_bundle(body: PullSimBundleRequest, request: Request):
     request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.sim_bundle.pull_started",
+        request_id=request_id,
+        status="started",
+        source_uri=body.sourceUri,
+        activate=body.activate,
+    )
     try:
         bundle = lifecycle.pull_and_register_bundle_auto(
             source_uri=body.sourceUri,
@@ -154,13 +198,42 @@ def pull_sim_bundle(body: PullSimBundleRequest, request: Request):
             auto_activate=body.activate,
         )
     except lifecycle.BundleLifecycleError as e:
+        log_event(
+            "ops.sim_bundle.pull_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            source_uri=body.sourceUri,
+            error_code=ErrorCode.INVALID_INPUT.value,
+            error_type=type(e).__name__,
+        )
         raise AlgorithmException(
             str(e), code=ErrorCode.INVALID_INPUT
         ) from e
 
     response = {"status": "validated", "bundle": _bundle_to_dict(bundle)}
+    log_event(
+        "ops.sim_bundle.pull_completed",
+        request_id=request_id,
+        status="completed",
+        source_uri=body.sourceUri,
+        bundle_id=bundle.bundle_id,
+        bundle_kind=getattr(bundle, "bundle_kind", "runtime"),
+        tenant_id=bundle.tenant_id,
+        network_id=bundle.network_id,
+        area_id=bundle.area_id,
+    )
     if body.activate:
         bundle = lifecycle.activate_bundle(bundle.bundle_id, request_id=request_id)
+        log_event(
+            "ops.bundle.activate_completed",
+            request_id=request_id,
+            status="completed",
+            bundle_id=bundle.bundle_id,
+            tenant_id=bundle.tenant_id,
+            network_id=bundle.network_id,
+            area_id=bundle.area_id,
+        )
         response["status"] = "activated"
         response["bundle"] = _bundle_to_dict(bundle)
     return response
@@ -169,17 +242,43 @@ def pull_sim_bundle(body: PullSimBundleRequest, request: Request):
 @router.post("/bundles/register-local")
 def register_local(body: RegisterLocalRequest, request: Request):
     request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.bundle.register_local_started",
+        request_id=request_id,
+        status="started",
+        bundle_dir=body.bundleDir,
+        activate=body.activate,
+    )
     try:
         bundle = lifecycle.register_local_bundle(
             bundle_dir=Path(body.bundleDir),
             request_id=request_id,
         )
     except lifecycle.BundleLifecycleError as e:
+        log_event(
+            "ops.bundle.register_local_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            bundle_dir=body.bundleDir,
+            error_code=ErrorCode.INVALID_INPUT.value,
+            error_type=type(e).__name__,
+        )
         raise AlgorithmException(
             str(e), code=ErrorCode.INVALID_INPUT
         ) from e
 
     response = {"status": "validated", "bundle": _bundle_to_dict(bundle)}
+    log_event(
+        "ops.bundle.register_local_completed",
+        request_id=request_id,
+        status="completed",
+        bundle_id=bundle.bundle_id,
+        bundle_kind=getattr(bundle, "bundle_kind", "runtime"),
+        tenant_id=bundle.tenant_id,
+        network_id=bundle.network_id,
+        area_id=bundle.area_id,
+    )
     if body.activate:
         bundle = lifecycle.activate_bundle(bundle.bundle_id, request_id=request_id)
         response["status"] = "activated"
@@ -190,26 +289,75 @@ def register_local(body: RegisterLocalRequest, request: Request):
 @router.post("/bundles/{bundle_id}/activate")
 def activate(bundle_id: str, request: Request):
     request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.bundle.activate_started",
+        request_id=request_id,
+        status="started",
+        bundle_id=bundle_id,
+    )
     try:
         bundle = lifecycle.activate_bundle(bundle_id, request_id=request_id)
     except lifecycle.BundleLifecycleError as e:
+        log_event(
+            "ops.bundle.activate_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            bundle_id=bundle_id,
+            error_code=ErrorCode.INVALID_INPUT.value,
+            error_type=type(e).__name__,
+        )
         raise AlgorithmException(
             str(e), code=ErrorCode.INVALID_INPUT
         ) from e
+    log_event(
+        "ops.bundle.activate_completed",
+        request_id=request_id,
+        status="completed",
+        bundle_id=bundle.bundle_id,
+        tenant_id=bundle.tenant_id,
+        network_id=bundle.network_id,
+        area_id=bundle.area_id,
+    )
     return {"status": "activated", "bundle": _bundle_to_dict(bundle)}
 
 
 @router.post("/networks/{network_id}/rollback")
 def rollback(network_id: str, body: RollbackRequest, request: Request):
     request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.bundle.rollback_started",
+        request_id=request_id,
+        status="started",
+        network_id=network_id,
+        tenant_id=body.tenantId,
+    )
     try:
         bundle = lifecycle.rollback_bundle(
             network_id, tenant_id=body.tenantId, request_id=request_id
         )
     except lifecycle.BundleLifecycleError as e:
+        log_event(
+            "ops.bundle.rollback_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            network_id=network_id,
+            tenant_id=body.tenantId,
+            error_code=ErrorCode.INVALID_INPUT.value,
+            error_type=type(e).__name__,
+        )
         raise AlgorithmException(
             str(e), code=ErrorCode.INVALID_INPUT
         ) from e
+    log_event(
+        "ops.bundle.rollback_completed",
+        request_id=request_id,
+        status="completed",
+        network_id=network_id,
+        tenant_id=body.tenantId,
+        bundle_id=bundle.bundle_id if bundle else None,
+    )
     return {
         "status": "rolled_back",
         "activeBundle": _bundle_to_dict(bundle) if bundle else None,

@@ -18,7 +18,7 @@ from fastapi import APIRouter, Query, Request
 
 from src.core.error_codes import ErrorCode
 from src.core.exception import AlgorithmException
-from src.core.logger import logger
+from src.core.structured_logging import log_event
 from src.preprocessing import (
     IntersectionConfig,
     get_config,
@@ -108,8 +108,14 @@ def run_ai_algorithm(ai_input: AIInput, request: Request):
             if area_id is not None
         }
     )
-    logger.info(
-        f"request_id={request_id} RunAI crosses={len(ai_input.crosses)} areas={area_ids}"
+    log_event(
+        "runtime.inference.request_received",
+        request_id=request_id,
+        status="started",
+        trace_step="request_received",
+        message=f"RunAI request received crosses={len(ai_input.crosses)} areas={area_ids}",
+        cross_count=len(ai_input.crosses),
+        area_ids=area_ids,
     )
     return AIService(ai_input).run(ai_input, request_id=request_id)
 

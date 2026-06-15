@@ -6,7 +6,7 @@ Use this only for local log exploration. Production observability should use the
 
 ```bash
 cd ai-algorithm-service
-docker compose up -d elasticsearch kibana logstash
+docker compose --profile app --profile observability up -d
 ```
 
 ## Verify Elasticsearch
@@ -25,9 +25,10 @@ Create an index pattern for the log index used by the compose stack, then filter
 
 - `service.name`
 - `request_id`
-- `bundle_id`
-- `network_id`
-- `area_id`
+- `url.path`
+- `http.request.method`
+- `http.response.status_code`
+- `event.duration_ms`
 
 ## Generate sample logs
 
@@ -53,6 +54,7 @@ The request may fail validation; that is fine for checking log ingestion.
 |---|---|
 | Kibana has no data | Logstash container running, index pattern exists |
 | Elasticsearch not reachable | `docker compose ps elasticsearch` |
+| Logstash has ILM/alias errors | `docker compose logs elasticsearch-init logstash` |
 | Missing request id | Caller did not set `X-Request-Id` |
 
 More: [troubleshooting.md](troubleshooting.md).

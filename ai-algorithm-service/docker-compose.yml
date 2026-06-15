@@ -244,7 +244,7 @@ services:
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
-    profiles: ["observability"]
+    profiles: ["observability2"]
     restart: unless-stopped
 
   elasticsearch:
@@ -261,17 +261,30 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
 
+  elasticsearch-init:
+    image: curlimages/curl:8.8.0
+    container_name: elasticsearch_init
+    user: "0:0"
+    volumes:
+      - ./observability/logstash/ilm-policy.json:/ilm-policy.json:ro
+      - ./observability/elasticsearch/init.sh:/init-elasticsearch.sh:ro
+    entrypoint: ["/bin/sh", "/init-elasticsearch.sh"]
+    depends_on:
+      elasticsearch:
+        condition: service_started
+    profiles: ["observability"]
+    restart: "no"
+
   logstash:
     image: docker.elastic.co/logstash/logstash:8.13.4
     container_name: logstash
     user: "0:0"
     volumes:
       - ./observability/logstash/pipeline.conf:/usr/share/logstash/pipeline/logstash.conf:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ${DOCKER_CONTAINERS_PATH:-/home/docker-data/containers}:/docker/containers:ro
     depends_on:
-      elasticsearch:
-        condition: service_started
-        required: false
+      elasticsearch-init:
+        condition: service_completed_successfully
     profiles: ["observability"]
     restart: unless-stopped
 
@@ -305,7 +318,7 @@ services:
       prometheus:
         condition: service_started
         required: false
-    profiles: ["observability"]
+    profiles: ["observability2"]
     restart: unless-stopped
 
 volumes:

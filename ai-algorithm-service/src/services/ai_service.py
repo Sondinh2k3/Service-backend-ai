@@ -26,6 +26,7 @@ from src.core.config import get_settings
 from src.core.error_codes import ErrorCode
 from src.core.exception import AlgorithmException
 from src.core.logger import logger
+from src.core.structured_logging import log_event
 from src.preprocessing import (
     FeatureNormalizer,
     MAX_NEIGHBORS,
@@ -74,18 +75,54 @@ class AIService:
     def run(self, ai_input: AIInput, *, request_id: str = "") -> AIOutput:
         crosses = self._hydrate_runtime_crosses(ai_input)
         if not crosses:
+            log_event(
+                "runtime.inference.validation_failed",
+                level="warning",
+                request_id=request_id,
+                status="failed",
+                trace_step="input_validation",
+                error_code=ErrorCode.INVALID_INPUT.value,
+                reason="empty_crosses",
+            )
             raise AlgorithmException(
                 "Danh sach cross khong duoc rong.",
                 code=ErrorCode.INVALID_INPUT,
             )
+        log_event(
+            "runtime.input.hydrated",
+            request_id=request_id,
+            status="completed",
+            trace_step="input_hydration",
+            cross_count=len(crosses),
+        )
 
         # Group by areaId, giu thu tu goc trong request de output align.
         groups: Dict[int, List[Tuple[int, Cross]]] = defaultdict(list)
         for idx, c in enumerate(crosses):
             groups[c.areaId].append((idx, c))
+        area_ids = sorted(groups)
+        log_event(
+            "runtime.area.grouped",
+            request_id=request_id,
+            status="completed",
+            trace_step="area_grouping",
+            area_ids=area_ids,
+            area_count=len(area_ids),
+            cross_count=len(crosses),
+        )
 
         settings = get_settings()
         if settings.enforce_single_area_per_request and len(groups) > 1:
+            log_event(
+                "runtime.area.validation_failed",
+                level="warning",
+                request_id=request_id,
+                status="failed",
+                trace_step="area_validation",
+                area_ids=area_ids,
+                area_count=len(area_ids),
+                error_code=ErrorCode.MULTIPLE_AREAS_NOT_ALLOWED.value,
+            )
             raise AlgorithmException(
                 (
                     f"Request chua {len(groups)} area ({sorted(groups)}). "
@@ -93,10 +130,30 @@ class AIService:
                 ),
                 code=ErrorCode.MULTIPLE_AREAS_NOT_ALLOWED,
             )
+        log_event(
+            "runtime.input.validation_completed",
+            request_id=request_id,
+            status="completed",
+            trace_step="input_validation",
+            area_ids=area_ids,
+            area_count=len(area_ids),
+            cross_count=len(crosses),
+        )
 
         # Readiness guard: moi area phai ready truoc khi inference.
         for area_id in groups:
             check = check_area(area_id)
+            log_event(
+                "runtime.readiness.checked",
+                request_id=request_id,
+                status="completed" if check.ready else "failed",
+                level="info" if check.ready else "warning",
+                trace_step="readiness_check",
+                area_id=area_id,
+                ready=check.ready,
+                missing=check.missing,
+                error_code=None if check.ready else ErrorCode.AREA_NOT_READY.value,
+            )
             if not check.ready:
                 raise AlgorithmException(
                     f"Area {area_id} chua san sang: missing={check.missing}.",
@@ -116,7 +173,28 @@ class AIService:
         try:
             for area_id, items in groups.items():
                 area_crosses = [c for _, c in items]
-                area_outputs, area_triggered = self._run_area(area_id, area_crosses)
+                log_event(
+                    "runtime.inference.area_started",
+                    request_id=request_id,
+                    status="started",
+                    trace_step="area_inference",
+                    area_id=area_id,
+                    cross_count=len(area_crosses),
+                )
+                area_t0 = time.perf_counter()
+                area_outputs, area_triggered = self._run_area(
+                    area_id, area_crosses, request_id=request_id
+                )
+                log_event(
+                    "runtime.inference.area_completed",
+                    request_id=request_id,
+                    status="completed",
+                    trace_step="area_inference",
+                    area_id=area_id,
+                    cross_count=len(area_crosses),
+                    duration_ms=int((time.perf_counter() - area_t0) * 1000),
+                    guardrail_triggered=area_triggered,
+                )
                 if area_triggered:
                     guardrail_triggered = True
                 for (orig_idx, _), out in zip(items, area_outputs):
@@ -129,6 +207,18 @@ class AIService:
                 bundle_id = pol.bundle_id or bundle_id
         except AlgorithmException as exc:
             latency_ms = int((time.perf_counter() - t0) * 1000)
+            log_event(
+                "runtime.inference.failed",
+                level="warning",
+                request_id=request_id,
+                status="failed",
+                trace_step="inference",
+                area_id=exc.area_id or first_area_id,
+                cross_count=len(crosses),
+                duration_ms=latency_ms,
+                error_code=exc.code.value,
+                bundle_id=bundle_id,
+            )
             audit_service.record_inference(
                 request_id=request_id,
                 area_id=exc.area_id or first_area_id,
@@ -145,6 +235,18 @@ class AIService:
             raise
         except Exception:
             latency_ms = int((time.perf_counter() - t0) * 1000)
+            log_event(
+                "runtime.inference.failed",
+                level="exception",
+                request_id=request_id,
+                status="failed",
+                trace_step="inference",
+                area_id=first_area_id,
+                cross_count=len(crosses),
+                duration_ms=latency_ms,
+                error_code=ErrorCode.INTERNAL_ERROR.value,
+                bundle_id=bundle_id,
+            )
             audit_service.record_inference(
                 request_id=request_id,
                 area_id=first_area_id,
@@ -161,6 +263,19 @@ class AIService:
             raise
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
+        log_event(
+            "runtime.inference.completed",
+            request_id=request_id,
+            status="completed",
+            trace_step="inference",
+            area_id=first_area_id,
+            cross_count=len(crosses),
+            duration_ms=latency_ms,
+            policy_version=policy_version,
+            config_version=config_version,
+            bundle_id=bundle_id,
+            guardrail_triggered=guardrail_triggered,
+        )
         audit_service.record_inference(
             request_id=request_id,
             area_id=first_area_id,
@@ -355,9 +470,19 @@ class AIService:
     # ------------------------------------------------------------------
 
     def _run_area(
-        self, area_id: int, crosses: List[Cross]
+        self, area_id: int, crosses: List[Cross], *, request_id: str = ""
     ) -> Tuple[List[AlgorithmOutput], bool]:
         policy = load_policy(area_id)
+        log_event(
+            "runtime.policy.loaded",
+            request_id=request_id,
+            status="completed",
+            trace_step="policy_load",
+            area_id=area_id,
+            network_id=policy.network_id,
+            bundle_id=policy.bundle_id,
+            policy_version=policy.policy_version or policy.meta.get("policy_version"),
+        )
         network = ensure_area_configs(area_id, crosses)
 
         # Doc runtime contract da validate o load_policy.
@@ -389,8 +514,25 @@ class AIService:
                 cross_configs=cross_configs_dict,
                 cache_key=(area_id, policy.bundle_id),
             )
+            log_event(
+                "runtime.feature_builder.loaded",
+                request_id=request_id,
+                status="completed",
+                trace_step="feature_builder_load",
+                area_id=area_id,
+                bundle_id=policy.bundle_id,
+                source="bundle",
+            )
         else:
             feature_builder = get_default_builder()
+            log_event(
+                "runtime.feature_builder.loaded",
+                request_id=request_id,
+                status="completed",
+                trace_step="feature_builder_load",
+                area_id=area_id,
+                source="default",
+            )
 
         for c in crosses:
             cfg = get_config(area_id, c.id)
@@ -426,13 +568,61 @@ class AIService:
         # Run ONNX
         use_local = bool(policy.meta.get("use_local_gnn", True))
         if use_local:
+            infer_t0 = time.perf_counter()
+            log_event(
+                "runtime.model.inference_started",
+                request_id=request_id,
+                status="started",
+                trace_step="model_inference",
+                area_id=area_id,
+                network_id=policy.network_id,
+                bundle_id=policy.bundle_id,
+                model_variant="local_gnn",
+                cross_count=len(crosses),
+            )
             actions = self._run_local_gnn(
                 policy, crosses, network, obs_by_id, mask_by_id,
                 obs_dim, base_obs_dim, window_size, num_actions, keep_idx,
             )
+            log_event(
+                "runtime.model.inference_completed",
+                request_id=request_id,
+                status="completed",
+                trace_step="model_inference",
+                area_id=area_id,
+                network_id=policy.network_id,
+                bundle_id=policy.bundle_id,
+                model_variant="local_gnn",
+                cross_count=len(crosses),
+                duration_ms=int((time.perf_counter() - infer_t0) * 1000),
+            )
         else:
+            infer_t0 = time.perf_counter()
+            log_event(
+                "runtime.model.inference_started",
+                request_id=request_id,
+                status="started",
+                trace_step="model_inference",
+                area_id=area_id,
+                network_id=policy.network_id,
+                bundle_id=policy.bundle_id,
+                model_variant="global",
+                cross_count=len(crosses),
+            )
             actions = self._run_global(
                 policy, crosses, obs_by_id, mask_by_id, num_actions, keep_idx,
+            )
+            log_event(
+                "runtime.model.inference_completed",
+                request_id=request_id,
+                status="completed",
+                trace_step="model_inference",
+                area_id=area_id,
+                network_id=policy.network_id,
+                bundle_id=policy.bundle_id,
+                model_variant="global",
+                cross_count=len(crosses),
+                duration_ms=int((time.perf_counter() - infer_t0) * 1000),
             )
 
         # Drift detection: observe `obs_mean` (trung binh observation da z-scored).
@@ -450,6 +640,17 @@ class AIService:
             drift_registry.maybe_check(net_id)
         except Exception as e:
             logger.warning(f"[drift] observe/check failed: {e}")
+            log_event(
+                "runtime.drift.check_failed",
+                level="warning",
+                request_id=request_id,
+                status="failed",
+                trace_step="drift_check",
+                area_id=area_id,
+                network_id=policy.network_id,
+                bundle_id=policy.bundle_id,
+                error_type=type(e).__name__,
+            )
 
         logger.info(f"Area {area_id}: inference xong cho {len(crosses)} cross")
 
@@ -458,6 +659,7 @@ class AIService:
         for i, c in enumerate(crosses):
             out, triggered = self._actions_to_signal_plan(
                 c, actions[i], cfgs[c.id], area_id, num_actions, keep_idx,
+                request_id=request_id,
             )
             outputs.append(out)
             if triggered:
@@ -569,6 +771,8 @@ class AIService:
         area_id: int,
         num_actions: int,
         keep_idx: int,
+        *,
+        request_id: str = "",
     ) -> Tuple[AlgorithmOutput, bool]:
         stage_actions = map_stage_actions(
             actions_standard, cross, config, keep_action_index=keep_idx,
@@ -671,6 +875,16 @@ class AIService:
             masked_stage_indices=masked_indices,
         )
         if report.triggered:
+            log_event(
+                "runtime.guardrail.applied",
+                level="warning",
+                request_id=request_id,
+                status="completed",
+                trace_step="guardrail",
+                area_id=area_id,
+                cross_id=cross.id,
+                violation_count=len(report.violations),
+            )
             for v in report.violations:
                 logger.warning(
                     f"[guardrail] cross={v.cross_id} stage={v.stage_idx} "

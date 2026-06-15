@@ -6,9 +6,10 @@ Moi endpoint idempotent theo `sourceEventId`.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from src.core.auth import require_internal_api_key
+from src.core.structured_logging import log_event
 from src.db import repositories as repo
 from src.db.base import get_session
 from src.schemas.sync_schemas import (
@@ -118,22 +119,64 @@ def sync_cross_config(area_id: int, cross_id: int, body: CrossConfigSync):
 
 
 @router.put("/areas/{area_id}/real-network")
-def sync_real_network_snapshot(area_id: int, body: RealNetworkSnapshotSync):
-    return sync_service.sync_real_network_snapshot(
+def sync_real_network_snapshot(area_id: int, body: RealNetworkSnapshotSync, request: Request):
+    request_id = getattr(request.state, "request_id", "")
+    log_event(
+        "ops.real_network.sync_started",
+        request_id=request_id,
+        status="started",
+        trace_step="sync_start",
         area_id=area_id,
         tenant_id=body.tenantId,
         network_id=body.networkId,
-        schema_version=body.schemaVersion,
-        source_version=body.sourceVersion,
-        area=body.area,
-        area_crosses=body.areaCrosses,
-        crosses=body.crosses,
-        roads=body.roads,
-        cycles=body.cycles,
-        stages=body.stages,
-        sim_to_real=body.simToReal,
+        source_event_id=body.sourceEventId,
+        cross_count=len(body.crosses or []),
+        road_count=len(body.roads or []),
+        cycle_count=len(body.cycles or []),
+        stage_count=len(body.stages or []),
+    )
+    try:
+        result = sync_service.sync_real_network_snapshot(
+            area_id=area_id,
+            tenant_id=body.tenantId,
+            network_id=body.networkId,
+            schema_version=body.schemaVersion,
+            source_version=body.sourceVersion,
+            area=body.area,
+            area_crosses=body.areaCrosses,
+            crosses=body.crosses,
+            roads=body.roads,
+            cycles=body.cycles,
+            stages=body.stages,
+            sim_to_real=body.simToReal,
+            source_event_id=body.sourceEventId,
+            request_id=request_id,
+        )
+    except Exception as exc:
+        log_event(
+            "ops.real_network.sync_failed",
+            level="exception",
+            request_id=request_id,
+            status="failed",
+            trace_step="sync",
+            area_id=area_id,
+            tenant_id=body.tenantId,
+            network_id=body.networkId,
+            source_event_id=body.sourceEventId,
+            error_type=type(exc).__name__,
+        )
+        raise
+    log_event(
+        "ops.real_network.sync_completed",
+        request_id=request_id,
+        status="completed",
+        trace_step="sync",
+        area_id=area_id,
+        tenant_id=body.tenantId,
+        network_id=body.networkId,
         source_event_id=body.sourceEventId,
     )
+    return result
 
 
 @router.get(

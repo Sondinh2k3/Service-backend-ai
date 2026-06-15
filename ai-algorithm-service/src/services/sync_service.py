@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from src.core.error_codes import ErrorCode
 from src.core.exception import AlgorithmException
 from src.core.logger import logger
+from src.core.structured_logging import log_event
 from src.db import repositories as repo
 from src.db.base import get_session
 from src.preprocessing.intersection_registry import (
@@ -277,6 +278,7 @@ def sync_real_network_snapshot(
     stages: List[Dict[str, Any]],
     sim_to_real: Dict[str, Any],
     source_event_id: str,
+    request_id: str = "",
 ) -> dict:
     """Luu snapshot mang thuc vao DB noi bo cua AI service.
 
@@ -349,6 +351,21 @@ def sync_real_network_snapshot(
                 area_id=area_id,
                 extra={"invalidMapping": invalid_mapping},
             )
+    log_event(
+        "ops.real_network.payload_validated",
+        request_id=request_id,
+        status="completed",
+        trace_step="payload_validation",
+        area_id=area_id,
+        tenant_id=effective_tenant_id,
+        network_id=effective_network_id,
+        source_event_id=source_event_id,
+        area_cross_count=len(payload["area_crosses"]),
+        cross_count=len(payload["crosses"]),
+        road_count=len(payload["roads"]),
+        cycle_count=len(payload["cycles"]),
+        stage_count=len(payload["stages"]),
+    )
 
     payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     checksum = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
@@ -394,6 +411,17 @@ def sync_real_network_snapshot(
             event_type="real_network_snapshot.upsert",
             payload_hash=_hash_payload(payload),
         )
+        log_event(
+            "ops.real_network.snapshot_saved",
+            request_id=request_id,
+            status="completed",
+            trace_step="snapshot_save",
+            area_id=area_id,
+            tenant_id=effective_tenant_id,
+            network_id=effective_network_id,
+            source_event_id=source_event_id,
+            checksum=checksum,
+        )
 
     logger.info(
         f"Sync real_network_snapshot area={area_id} network={effective_network_id} "
@@ -419,15 +447,56 @@ def sync_real_network_snapshot(
         clear_intersection_config_cache(area_id)
         compile_result = {"status": "ok", "outputDir": str(real_norm_dir)}
         logger.info(f"[sync] real_normalization eager-compiled -> {real_norm_dir}")
+        log_event(
+            "ops.real_network.normalization_compiled",
+            request_id=request_id,
+            status="completed",
+            trace_step="normalization_compile",
+            area_id=area_id,
+            tenant_id=effective_tenant_id,
+            network_id=effective_network_id,
+            output_dir=str(real_norm_dir),
+        )
         try:
             from src.ops.lifecycle import _notify_runtime_reload
 
             _notify_runtime_reload(effective_network_id, run_preflight=False)
+            log_event(
+                "ops.real_network.runtime_notified",
+                request_id=request_id,
+                status="completed",
+                trace_step="runtime_notify",
+                area_id=area_id,
+                tenant_id=effective_tenant_id,
+                network_id=effective_network_id,
+            )
         except Exception as e:
             logger.warning(f"[sync] notify runtime reload fail area={area_id}: {e}")
+            log_event(
+                "ops.real_network.runtime_notify_failed",
+                level="warning",
+                request_id=request_id,
+                status="failed",
+                trace_step="runtime_notify",
+                area_id=area_id,
+                tenant_id=effective_tenant_id,
+                network_id=effective_network_id,
+                error_type=type(e).__name__,
+            )
     except Exception as e:
         compile_result = {"status": "failed", "reason": str(e)}
         logger.warning(f"[sync] eager-compile real_normalization fail area={area_id}: {e}")
+        log_event(
+            "ops.real_network.normalization_compile_failed",
+            level="warning",
+            request_id=request_id,
+            status="failed",
+            trace_step="normalization_compile",
+            area_id=area_id,
+            tenant_id=effective_tenant_id,
+            network_id=effective_network_id,
+            error_type=type(e).__name__,
+        )
 
     # Retry compose cho sim bundle dang cho real snapshot. Idempotent: chi anh
     # huong bundle o status 'pending_real_snapshot'.

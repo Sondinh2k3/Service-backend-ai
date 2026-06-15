@@ -138,6 +138,15 @@ class Settings(BaseSettings):
     # ----- Telemetry (plan 6.2.4)
     telemetry_enabled: bool = True
     request_id_header: str = "X-Request-Id"
+    telemetry_excluded_paths: str = "/metrics,/health,/ready"
+
+    @property
+    def telemetry_excluded_path_set(self) -> set[str]:
+        return {
+            path.strip()
+            for path in self.telemetry_excluded_paths.split(",")
+            if path.strip()
+        }
 
     class Config:
         env_file_encoding = "utf-8"

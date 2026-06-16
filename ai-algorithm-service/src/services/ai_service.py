@@ -39,8 +39,6 @@ from src.preprocessing import (
     get_observation_history,
     map_stage_actions,
 )
-from src.preprocessing.feature_builder import build_from_bundle, get_default_builder
-from src.preprocessing.intersection_registry import bundle_root_for_area
 from src.preprocessing.phase_normalizer import NUM_STANDARD_PHASES
 from src.preprocessing.phase_normalizer import _effective_phase_mapping
 from src.preprocessing.topology_normalizer import TOTAL_LANES
@@ -511,40 +509,6 @@ class AIService:
         mask_by_id: Dict[int, np.ndarray] = {}
         cfgs: Dict[int, object] = {}
 
-        # Load FeatureBuilder cho area (compile formula 1 lan + cache). Bundle
-        # v2 -> dung feature_formula.json; v1 hoac chua co bundle -> default.
-        bundle_root = bundle_root_for_area(area_id)
-        if bundle_root is not None:
-            cross_configs_dict: Dict[int, dict] = {}
-            for c in crosses:
-                cfg_tmp = get_config(area_id, c.id)
-                if cfg_tmp is not None:
-                    cross_configs_dict[c.id] = cfg_tmp.to_dict()
-            feature_builder = build_from_bundle(
-                bundle_root=bundle_root,
-                cross_configs=cross_configs_dict,
-                cache_key=(area_id, policy.bundle_id),
-            )
-            log_event(
-                "runtime.feature_builder.loaded",
-                request_id=request_id,
-                status="completed",
-                trace_step="feature_builder_load",
-                area_id=area_id,
-                bundle_id=policy.bundle_id,
-                source="bundle",
-            )
-        else:
-            feature_builder = get_default_builder()
-            log_event(
-                "runtime.feature_builder.loaded",
-                request_id=request_id,
-                status="completed",
-                trace_step="feature_builder_load",
-                area_id=area_id,
-                source="default",
-            )
-
         for c in crosses:
             cfg = get_config(area_id, c.id)
             cfgs[c.id] = cfg
@@ -553,7 +517,6 @@ class AIService:
             lane_features, _ = build_lane_features(
                 c,
                 cfg,
-                feature_builder=feature_builder,
                 observation_timestamp=self.observation_timestamp,
             )
             obs_t = lane_features.flatten().astype(np.float32)

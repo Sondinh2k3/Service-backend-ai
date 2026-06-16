@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     # deployment config instead of requiring every inference request to resend
     # them.
     runtime_observed_length_m: float = 80.0
-    runtime_average_vehicle_space_m: float = 7.5
+    runtime_average_vehicle_space_m: float = 2.5
     runtime_average_speed_unit: str = "km/h"
     runtime_queue_length_unit: str = "m"
     runtime_occupancy_unit: str = "percent"

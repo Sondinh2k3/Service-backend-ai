@@ -20,11 +20,8 @@ from typing import Deque, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from traffic_rl_features import default_spec
-
 from src.core.config import get_settings
 from src.core.logger import logger
-from src.preprocessing.feature_builder import FeatureBuilder, get_default_builder
 from src.preprocessing.intersection_registry import IntersectionConfig
 from src.schemas.common_schemas.cross import Cross
 from src.schemas.common_schemas.road import Road
@@ -134,36 +131,25 @@ def _group_roads_by_direction(
 def build_lane_features(
     cross: Cross,
     config: Optional[IntersectionConfig] = None,
-    feature_builder: Optional[FeatureBuilder] = None,
     observation_timestamp: object = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Dựng ma trận feature cho 12 lane bằng formula trong bundle's feature_formula.json.
+    Dựng ma trận feature chuẩn hóa cho 12 lane.
 
     Args:
         cross: request payload.
         config: IntersectionConfig đã load (chứa observation_mask static).
-        feature_builder: instance đã compile formula. Nếu None -> dùng default
-                         (legacy fallback, KHÔNG nên ở production).
+        observation_timestamp: timestamp dùng để tránh push trùng vào rolling history.
 
     Returns:
-        features: shape (12, C) — lane-major. Default C=4:
+        features: shape (12, 4) — lane-major:
                   density, queue, occupancy, speed.
         lane_mask: shape (12,) — 1 nếu lane có data thật, 0 nếu padding.
     """
-    builder = feature_builder if feature_builder is not None else get_default_builder()
-    num_channels = builder.channel_count
-    default_spec_obj = default_spec()
-    use_default_formula = (
-        builder.spec.channels == default_spec_obj.channels
-        and builder.spec.formulas == default_spec_obj.formulas
-    )
-
     groups, _ = _group_roads_by_direction(cross, config)
 
-    feats = np.zeros((TOTAL_LANES, num_channels), dtype=np.float32)
-    if use_default_formula and num_channels == 4:
-        feats[:] = DEFAULT_CHANNEL_VALUES
+    feats = np.zeros((TOTAL_LANES, 4), dtype=np.float32)
+    feats[:] = DEFAULT_CHANNEL_VALUES
     lane_mask = np.zeros(TOTAL_LANES, dtype=np.float32)
     settings = get_settings()
     observed_length_m = max(float(settings.runtime_observed_length_m), 1.0)
@@ -216,11 +202,7 @@ def build_lane_features(
         if road.queueLength is not None:
             queue_norm = np.clip(float(road.queueLength) / observed_length_m, 0.0, 1.0)
 
-        if road.density is not None:
-            density_norm = float(road.density)
-            if density_norm > 1.0:
-                density_norm = density_norm * avg_vehicle_space_m / (1000.0 * lanes)
-        elif road.totalVehicle is not None:
+        if road.totalVehicle is not None:
             density_norm = (
                 float(road.totalVehicle) * avg_vehicle_space_m
                 / (observed_length_m * lanes)
@@ -243,32 +225,6 @@ def build_lane_features(
             timestamp=observation_timestamp,
         )
 
-    def _custom_channel_values(road: Road) -> np.ndarray:
-        static = _static_for(road)
-        lanes = float(_effective_lanes(static))
-        unit = _speed_unit(road)
-        speed_kmh = _speed_kmh(road, unit)
-        density = None
-        queue = None
-        if road.density is not None:
-            density = float(road.density)
-        elif road.totalVehicle is not None:
-            density = np.clip(
-                float(road.totalVehicle) * avg_vehicle_space_m
-                / (observed_length_m * lanes),
-                0.0,
-                1.0,
-            )
-        if road.queueLength is not None:
-            queue = np.clip(float(road.queueLength) / observed_length_m, 0.0, 1.0)
-        return builder.compute(
-            real_road_id=int(road.id),
-            occupancy=float(road.occupancySpace),
-            speed=speed_kmh,
-            density=density,
-            queue=queue,
-        )
-
     for dir_idx in range(NUM_DIRECTIONS):
         roads = groups[dir_idx]
         if not roads:
@@ -280,11 +236,7 @@ def build_lane_features(
                 break
             static = _static_for(road)
             slots_for_road = _effective_lanes(static)
-            values = (
-                _normalized_default_metrics(road)
-                if use_default_formula and num_channels == 4
-                else _custom_channel_values(road)
-            )
+            values = _normalized_default_metrics(road)
             for _ in range(slots_for_road):
                 if lane_offset >= LANES_PER_DIRECTION:
                     break
@@ -293,7 +245,7 @@ def build_lane_features(
                 lane_mask[lane_idx] = 1.0
                 lane_offset += 1
 
-    # Override mask từ config nếu có (bundle quyết định, không phải runtime infer)
+    # Override mask từ config nếu có (snapshot/config quyết định, không phải runtime infer)
     if config is not None and config.observation_mask is not None:
         cfg_mask = np.asarray(config.observation_mask, dtype=np.float32)
         if cfg_mask.shape == (TOTAL_LANES,):

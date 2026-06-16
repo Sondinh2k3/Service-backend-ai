@@ -22,7 +22,6 @@ from src.preprocessing.intersection_registry import (
     clear_cache as clear_intersection_config_cache,
     save_config,
 )
-from src.services.readiness_service import check_area
 from src.services import model_manager
 from src.services import artifact_storage
 

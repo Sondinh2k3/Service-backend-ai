@@ -42,6 +42,7 @@ from src.preprocessing import (
 from src.preprocessing.feature_builder import build_from_bundle, get_default_builder
 from src.preprocessing.intersection_registry import bundle_root_for_area
 from src.preprocessing.phase_normalizer import NUM_STANDARD_PHASES
+from src.preprocessing.phase_normalizer import _effective_phase_mapping
 from src.preprocessing.topology_normalizer import TOTAL_LANES
 from src.observability.metrics import (
     record_guardrail_violation,
@@ -71,8 +72,10 @@ class AIService:
         self.min_green = settings.runtime_min_green
         self.max_green = settings.runtime_max_green
         self.green_time_step = settings.runtime_green_time_step
+        self.observation_timestamp = ai_input.timestamp
 
     def run(self, ai_input: AIInput, *, request_id: str = "") -> AIOutput:
+        self.observation_timestamp = ai_input.timestamp
         crosses = self._hydrate_runtime_crosses(ai_input)
         if not crosses:
             log_event(
@@ -317,6 +320,8 @@ class AIService:
                     x=raw.x,
                     y=raw.y,
                     cycle=cycle,
+                    minGreen=raw.minGreen,
+                    maxGreen=raw.maxGreen,
                     stages=stages,
                     roads=roads,
                 )
@@ -405,6 +410,8 @@ class AIService:
             red_clear = self._first_int(stage.redClear, meta.get("red_clear"), (cycle_meta or {}).get("red_clear"), 0)
             green = self._first_int(stage.greenTime, meta.get("green"))
             duration = self._first_int(stage.duration)
+            min_green = self._first_int(stage.minGreen, raw.minGreen, meta.get("min_green_time"))
+            max_green = self._first_int(stage.maxGreen, raw.maxGreen, meta.get("max_green_time"))
             if duration is None and green is not None and yellow is not None and red_clear is not None:
                 duration = green + yellow + red_clear
             if duration is None:
@@ -431,6 +438,9 @@ class AIService:
                     yellow=int(yellow),
                     redClear=int(red_clear or 0),
                     duration=int(duration),
+                    greenTime=int(green) if green is not None else int(duration) - int(yellow) - int(red_clear or 0),
+                    minGreen=min_green,
+                    maxGreen=max_green,
                 )
             )
         return stages
@@ -472,6 +482,7 @@ class AIService:
     def _run_area(
         self, area_id: int, crosses: List[Cross], *, request_id: str = ""
     ) -> Tuple[List[AlgorithmOutput], bool]:
+        settings = get_settings()
         policy = load_policy(area_id)
         log_event(
             "runtime.policy.loaded",
@@ -539,10 +550,15 @@ class AIService:
             cfgs[c.id] = cfg
 
             # Build observation tai timestep hien tai, shape (base_obs_dim,).
-            lane_features, _ = build_lane_features(c, cfg, feature_builder=feature_builder)
+            lane_features, _ = build_lane_features(
+                c,
+                cfg,
+                feature_builder=feature_builder,
+                observation_timestamp=self.observation_timestamp,
+            )
             obs_t = lane_features.flatten().astype(np.float32)
             if include_gt_ratios:
-                obs_t = np.concatenate([obs_t, extract_green_time_ratios(c)]).astype(np.float32)
+                obs_t = np.concatenate([obs_t, extract_green_time_ratios(c, cfg)]).astype(np.float32)
             if obs_t.shape[0] < base_obs_dim:
                 obs_t = np.concatenate(
                     [obs_t, np.zeros(base_obs_dim - obs_t.shape[0], dtype=np.float32)]
@@ -564,6 +580,18 @@ class AIService:
             normalizer = FeatureNormalizer(mean=policy.obs_mean, std=policy.obs_std)
             obs_by_id[c.id] = normalizer.apply(obs_full)
             mask_by_id[c.id] = build_action_mask(c, cfg)
+            if float(mask_by_id[c.id].sum()) <= 0.0:
+                if settings.ai_strict_mode or settings.is_production:
+                    raise AlgorithmException(
+                        f"Cross {c.id} khong map duoc stage nao vao 8 standard phases.",
+                        code=ErrorCode.POLICY_CONTRACT_MISMATCH,
+                        area_id=area_id,
+                    )
+                logger.warning(
+                    "[phase] Cross %s action_mask all-zero; fallback all-ones in non-strict mode.",
+                    c.id,
+                )
+                mask_by_id[c.id] = np.ones(NUM_STANDARD_PHASES, dtype=np.float32)
 
         # Run ONNX
         use_local = bool(policy.meta.get("use_local_gnn", True))
@@ -779,7 +807,7 @@ class AIService:
         )
         num_stages = len(cross.stages)
         cycle_length = int(cross.cycle.cycleLength)
-        min_green_limit, max_green_limit = self._effective_green_bounds()
+        min_green_limits, max_green_limits = self._effective_stage_green_bounds(cross)
 
         if num_stages == 0:
             raise AlgorithmException(
@@ -787,9 +815,12 @@ class AIService:
                 code=ErrorCode.INVALID_INPUT,
                 area_id=area_id,
             )
-        if min_green_limit > max_green_limit:
+        if np.any(min_green_limits > max_green_limits):
             raise AlgorithmException(
-                f"Green-time bounds khong hop le: min={min_green_limit} > max={max_green_limit}.",
+                (
+                    f"Green-time bounds khong hop le: "
+                    f"min={min_green_limits.tolist()} > max={max_green_limits.tolist()}."
+                ),
                 code=ErrorCode.INVALID_INPUT,
                 area_id=area_id,
             )
@@ -800,13 +831,13 @@ class AIService:
         ]
         total_fixed_time = sum(fixed_times)
         total_green_time = cycle_length - total_fixed_time
-        min_required_green = min_green_limit * num_stages
-        max_allowed_green = max_green_limit * num_stages
+        min_required_green = int(np.sum(min_green_limits))
+        max_allowed_green = int(np.sum(max_green_limits))
 
         if total_green_time < min_required_green:
             raise AlgorithmException(
                 f"Cross {cross.id} cycleLength={cycle_length} khong du de cap "
-                f"minGreen={min_green_limit} cho {num_stages} stages "
+                f"minGreen={min_green_limits.astype(int).tolist()} "
                 f"sau fixedTime={total_fixed_time}.",
                 code=ErrorCode.INVALID_INPUT,
                 area_id=area_id,
@@ -814,7 +845,7 @@ class AIService:
         if total_green_time > max_allowed_green:
             raise AlgorithmException(
                 f"Cross {cross.id} cycleLength={cycle_length} vuot qua kha nang "
-                f"maxGreen={max_green_limit} cho {num_stages} stages "
+                f"maxGreen={max_green_limits.astype(int).tolist()} "
                 f"sau fixedTime={total_fixed_time}.",
                 code=ErrorCode.INVALID_INPUT,
                 area_id=area_id,
@@ -822,10 +853,10 @@ class AIService:
 
         current_green_times = [
             max(
-                min_green_limit,
+                int(min_green_limits[idx]),
                 stage.duration - max(0, stage.yellow) - max(0, stage.redClear)
             )
-            for stage in cross.stages
+            for idx, stage in enumerate(cross.stages)
         ]
 
         # Action -> green-time delta: dich tu keep_idx, moi step = green_time_step
@@ -842,28 +873,26 @@ class AIService:
         for i, current_g in enumerate(current_green_times):
             action = stage_actions[i] if i < len(stage_actions) else keep_idx
             adj = _action_to_delta(action)
-            new_g = max(min_green_limit, min(max_green_limit, current_g + adj))
+            new_g = np.clip(
+                current_g + adj,
+                min_green_limits[i],
+                max_green_limits[i],
+            )
             new_green_times.append(new_g)
 
         new_green_times_arr = self._rescale_green_times(
             np.array(new_green_times, dtype=float),
             total_green_time,
-            min_green=min_green_limit,
-            max_green=max_green_limit,
+            min_green=min_green_limits,
+            max_green=max_green_limits,
         )
 
         # Guardrails (Lop 4 — Safety Layer)
         masked_indices: List[int] = []
+        phase_mapping = _effective_phase_mapping(cross, config)
         for i in range(num_stages):
-            if i >= len(stage_actions):
+            if i >= len(stage_actions) or i >= len(phase_mapping) or phase_mapping[i] < 0:
                 masked_indices.append(i)
-                continue
-            # phase_normalizer.map_stage_actions tra "1" cho stage bi mask hoac
-            # khong map duoc. Khong de phan biet that su -> rely on config.
-            if config is not None and config.phase_mapping is not None:
-                if i < len(config.phase_mapping):
-                    if int(config.phase_mapping[i]) < 0:
-                        masked_indices.append(i)
 
         report: GuardrailReport = apply_guardrails(
             cross_id=cross.id,
@@ -896,7 +925,7 @@ class AIService:
         final_green_times = [
             green_by_idx.get(
                 idx,
-                int(new_green_times_arr[idx]) if idx < len(new_green_times_arr) else self.min_green,
+                int(new_green_times_arr[idx]) if idx < len(new_green_times_arr) else int(min_green_limits[idx]),
             )
             for idx in range(num_stages)
         ]
@@ -906,8 +935,8 @@ class AIService:
             locked_indices=masked_indices,
             cross_id=cross.id,
             area_id=area_id,
-            min_green=min_green_limit,
-            max_green=max_green_limit,
+            min_green=min_green_limits,
+            max_green=max_green_limits,
         )
 
         output_stages: List[StageOutput] = []
@@ -930,13 +959,27 @@ class AIService:
             report.triggered,
         )
 
-    def _effective_green_bounds(self) -> Tuple[int, int]:
+    def _effective_stage_green_bounds(self, cross: Cross) -> Tuple[np.ndarray, np.ndarray]:
+        """Resolve green bounds per stage.
+
+        Priority:
+        stage-level request/static -> cross-level request -> runtime defaults,
+        then guardrail bounds if enabled.
+        """
         settings = get_settings()
-        if not settings.guardrail_enabled:
-            return self.min_green, self.max_green
+        mins: List[int] = []
+        maxs: List[int] = []
+        for stage in cross.stages:
+            min_g = self._first_int(stage.minGreen, cross.minGreen, self.min_green)
+            max_g = self._first_int(stage.maxGreen, cross.maxGreen, self.max_green)
+            if settings.guardrail_enabled:
+                min_g = max(int(min_g), int(settings.guardrail_min_green))
+                max_g = min(int(max_g), int(settings.guardrail_max_green))
+            mins.append(int(min_g))
+            maxs.append(int(max_g))
         return (
-            max(self.min_green, settings.guardrail_min_green),
-            min(self.max_green, settings.guardrail_max_green),
+            np.asarray(mins, dtype=float),
+            np.asarray(maxs, dtype=float),
         )
 
     def _rescale_green_times(
@@ -944,22 +987,25 @@ class AIService:
         green_times: np.ndarray,
         target_total: int,
         *,
-        min_green: int,
-        max_green: int,
+        min_green: int | np.ndarray,
+        max_green: int | np.ndarray,
     ) -> np.ndarray:
-        green_times = np.clip(green_times, min_green, max_green)
+        min_arr = np.broadcast_to(np.asarray(min_green, dtype=float), green_times.shape)
+        max_arr = np.broadcast_to(np.asarray(max_green, dtype=float), green_times.shape)
+        green_times = np.clip(green_times, min_arr, max_arr)
 
         current_sum = np.sum(green_times)
         if current_sum > 0 and current_sum != target_total:
             green_times = green_times * (target_total / current_sum)
-            green_times = np.maximum(green_times, min_green)
+            green_times = np.maximum(green_times, min_arr)
 
             excess = np.sum(green_times) - target_total
             if abs(excess) > 0.5:
-                above_min = green_times - min_green
+                above_min = green_times - min_arr
                 above_total = np.sum(above_min)
                 if above_total > 0:
                     green_times -= above_min * (excess / above_total)
+            green_times = np.clip(green_times, min_arr, max_arr)
 
         int_vals = np.floor(green_times).astype(int)
         remainder = int(target_total - np.sum(int_vals))
@@ -967,14 +1013,27 @@ class AIService:
         if remainder > 0:
             fractional = green_times - int_vals
             indices = np.argsort(fractional)[::-1]
-            for i in range(min(remainder, len(indices))):
-                int_vals[indices[i]] += 1
+            for idx in indices:
+                if remainder <= 0:
+                    break
+                capacity = int(max_arr[idx]) - int_vals[idx]
+                if capacity <= 0:
+                    continue
+                add = min(capacity, remainder)
+                int_vals[idx] += add
+                remainder -= add
         elif remainder < 0:
+            remainder = -remainder
             indices = np.argsort(int_vals)[::-1]
-            for i in range(-remainder):
-                idx = indices[i % len(indices)]
-                if int_vals[idx] > min_green:
-                    int_vals[idx] -= 1
+            for idx in indices:
+                if remainder <= 0:
+                    break
+                capacity = int_vals[idx] - int(min_arr[idx])
+                if capacity <= 0:
+                    continue
+                sub = min(capacity, remainder)
+                int_vals[idx] -= sub
+                remainder -= sub
 
         return int_vals
 
@@ -986,8 +1045,8 @@ class AIService:
         locked_indices: List[int],
         cross_id: int,
         area_id: int,
-        min_green: int,
-        max_green: int,
+        min_green: int | np.ndarray,
+        max_green: int | np.ndarray,
     ) -> np.ndarray:
         """Adjust integer green times so final green sum matches target_total.
 
@@ -995,11 +1054,13 @@ class AIService:
         Non-locked stages absorb rounding/guardrail deltas within min/max bounds.
         """
         values = np.array(green_times, dtype=int)
+        min_arr = np.broadcast_to(np.asarray(min_green, dtype=int), values.shape)
+        max_arr = np.broadcast_to(np.asarray(max_green, dtype=int), values.shape)
         locked = set(locked_indices or [])
         adjustable = [i for i in range(len(values)) if i not in locked]
 
         for i in adjustable:
-            values[i] = int(np.clip(values[i], min_green, max_green))
+            values[i] = int(np.clip(values[i], min_arr[i], max_arr[i]))
 
         delta = int(target_total - np.sum(values))
         if delta == 0:
@@ -1014,7 +1075,7 @@ class AIService:
 
         if delta > 0:
             for idx in sorted(adjustable, key=lambda i: values[i]):
-                capacity = max_green - values[idx]
+                capacity = max_arr[idx] - values[idx]
                 if capacity <= 0:
                     continue
                 add = min(capacity, delta)
@@ -1025,7 +1086,7 @@ class AIService:
         else:
             delta = -delta
             for idx in sorted(adjustable, key=lambda i: values[i], reverse=True):
-                capacity = values[idx] - min_green
+                capacity = values[idx] - min_arr[idx]
                 if capacity <= 0:
                     continue
                 sub = min(capacity, delta)
@@ -1037,7 +1098,8 @@ class AIService:
         if delta != 0:
             raise AlgorithmException(
                 f"Cross {cross_id} khong the can bang greenTime ve target={target_total} "
-                f"voi minGreen={min_green}, maxGreen={max_green}, locked={sorted(locked)}.",
+                f"voi minGreen={min_arr.tolist()}, maxGreen={max_arr.tolist()}, "
+                f"locked={sorted(locked)}.",
                 code=ErrorCode.INVALID_INPUT,
                 area_id=area_id,
             )

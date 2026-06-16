@@ -18,6 +18,16 @@ class Cross(BaseModel):
     cycle: Cycle | None = Field(default=None, description="The cycle information.")
     cycleId: int | None = Field(default=None, ge=1, description="Compact runtime cycle id.")
     cycleLength: float | None = Field(default=None, ge=1, description="Compact runtime cycle length in seconds.")
+    minGreen: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional cross-level minimum green time override in seconds.",
+    )
+    maxGreen: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional cross-level maximum green time override in seconds.",
+    )
     stages: list[StageInput] = Field(default_factory=list, description="List of signal stages included in the plan")
     roads: list[Road] = Field(default_factory=list, description="List of roads connected to this intersection.")
 

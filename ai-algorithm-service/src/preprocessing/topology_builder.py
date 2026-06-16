@@ -101,7 +101,6 @@ def _build_neighbors(
     Ưu tiên dùng Road.toCrossId + Road.direction. Fallback sang tọa độ nếu cross
     có x,y.
     """
-    ids = [c.id for c in crosses]
     by_id: Dict[int, Cross] = {c.id: c for c in crosses}
     neighbors: Dict[int, List[Dict]] = {c.id: [] for c in crosses}
 

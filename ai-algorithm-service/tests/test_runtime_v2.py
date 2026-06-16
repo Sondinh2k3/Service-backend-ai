@@ -25,12 +25,14 @@ from src.preprocessing.phase_normalizer import (
     NUM_STANDARD_PHASES,
     _effective_phase_mapping,
     build_action_mask,
+    extract_green_time_ratios,
 )
 from src.preprocessing.topology_normalizer import (
     LANES_PER_DIRECTION,
     NUM_DIRECTIONS,
     TOTAL_LANES,
     build_lane_features,
+    clear_road_metric_history,
 )
 from src.schemas.common_schemas.cross import Cross
 from src.schemas.common_schemas.cycle import Cycle
@@ -149,10 +151,27 @@ def test_action_mask_v2():
     np.testing.assert_array_equal(mask, expected)
 
 
+def test_green_time_ratios_use_standard_phase_and_max_green():
+    cross = _make_cross()
+    cross.stages[0].greenTime = 40
+    cross.stages[0].maxGreen = 80
+    cross.stages[1].greenTime = 30
+    cross.stages[1].maxGreen = 60
+    cfg = _make_v2_config()
+
+    ratios = extract_green_time_ratios(cross, cfg)
+
+    expected = np.zeros(NUM_STANDARD_PHASES)
+    expected[1] = 0.5
+    expected[4] = 0.5
+    np.testing.assert_allclose(ratios, expected)
+
+
 # ----------------------- Step 3.6: topology_normalizer + FeatureBuilder ----
 
 
 def test_build_lane_features_uses_feature_builder():
+    clear_road_metric_history()
     cross = _make_cross()
     cfg = _make_v2_config()
 
@@ -176,30 +195,32 @@ def test_build_lane_features_uses_feature_builder():
     )
 
     feats, lane_mask = build_lane_features(cross, cfg, feature_builder=builder)
-    assert feats.shape == (4, TOTAL_LANES)
+    assert feats.shape == (TOTAL_LANES, 4)
     # cfg.observation_mask đè onto lane_mask
     assert lane_mask.tolist() == cfg.observation_mask
 
     # Direction N (idx 0, lane 0): road 100001 -> lanes=1, length=100, speed_design=50
     assert feats[0, 0] == 1
-    assert feats[1, 0] == 50
-    assert feats[2, 0] == 100
+    assert feats[0, 1] == 50
+    assert feats[0, 2] == 100
     # Direction E (idx 1, lane 0): road 100002 -> length=150, speed_design=60
-    assert feats[0, 3] == 2
-    assert feats[2, 3] == 150
-    assert feats[1, 3] == 60
+    assert feats[3, 0] == 2
+    assert feats[3, 2] == 150
+    assert feats[3, 1] == 60
 
 
 def test_build_lane_features_default_builder_fallback():
     """Không truyền builder -> dùng default formula, không crash."""
+    clear_road_metric_history()
     cross = _make_cross()
     cfg = _make_v2_config()
     feats, lane_mask = build_lane_features(cross, cfg)  # no feature_builder
     # Default formula có 4 channel
-    assert feats.shape == (4, TOTAL_LANES)
+    assert feats.shape == (TOTAL_LANES, 4)
 
 
 def test_average_speed_defaults_to_kmh_when_unit_is_omitted():
+    clear_road_metric_history()
     cross = _make_cross()
     cfg = _make_v2_config()
     builder = FeatureBuilder(
@@ -213,6 +234,7 @@ def test_average_speed_defaults_to_kmh_when_unit_is_omitted():
 
 
 def test_average_speed_explicit_ms_is_converted_to_kmh():
+    clear_road_metric_history()
     cross = _make_cross()
     cross.roads[0].averageSpeedUnit = "m/s"
     cfg = _make_v2_config()
@@ -224,6 +246,23 @@ def test_average_speed_explicit_ms_is_converted_to_kmh():
     feats, _ = build_lane_features(cross, cfg, feature_builder=builder)
 
     assert feats[0, 0] == pytest.approx(108.0)
+
+
+def test_default_features_are_lane_major_and_use_camera_roi_length():
+    clear_road_metric_history()
+    cross = _make_cross()
+    cross.roads[0].totalVehicle = 8
+    cross.roads[0].queueLength = 20
+    cross.roads[0].occupancySpace = 40
+    cross.roads[0].averageSpeed = 25
+    cfg = _make_v2_config()
+
+    feats, _ = build_lane_features(cross, cfg, observation_timestamp="t1")
+
+    # road 100001: 1 lane, speedDesign=50. density=8*7.5/(80*1)=0.75.
+    assert feats[0].tolist() == pytest.approx([0.75, 0.25, 0.4, 0.5])
+    # Padding lane in the same direction follows training convention.
+    assert feats[1].tolist() == pytest.approx([0.0, 0.0, 0.0, 1.0])
 
 
 # ----------------------- FeatureBuilder unit ------------------------------

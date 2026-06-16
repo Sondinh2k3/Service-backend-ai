@@ -87,6 +87,16 @@ class Settings(BaseSettings):
     runtime_min_green: int = 10
     runtime_max_green: int = 60
     runtime_green_time_step: int = 5
+    # Observation calibration for real camera inputs. The traffic-flow dump does
+    # not carry detector/ROI length or units, so runtime keeps these as explicit
+    # deployment config instead of requiring every inference request to resend
+    # them.
+    runtime_observed_length_m: float = 80.0
+    runtime_average_vehicle_space_m: float = 7.5
+    runtime_average_speed_unit: str = "km/h"
+    runtime_queue_length_unit: str = "m"
+    runtime_occupancy_unit: str = "percent"
+    runtime_metric_history_samples: int = 5
 
     guardrail_enabled: bool = True
     guardrail_min_green: int = 10

@@ -28,15 +28,6 @@ from traffic_rl_features import (
 from src.core.logger import logger
 
 
-# Re-export defaults từ shared package để code cũ trong service không gãy.
-from traffic_rl_features import (  # noqa: E402  (re-export)
-    DEFAULT_ROAD_LANES,
-    DEFAULT_ROAD_LENGTH_M,
-    DEFAULT_ROAD_SATURATION_FLOW,
-    DEFAULT_ROAD_SPEED_DESIGN_KMH,
-)
-
-
 _cache: Dict[tuple, FeatureBuilder] = {}
 
 

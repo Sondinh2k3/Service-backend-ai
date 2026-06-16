@@ -22,13 +22,14 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import bindparam, create_engine, text
 
-from src.core.logger import logger
-from src.preprocessing.feature_builder import (
+from traffic_rl_features import (
     DEFAULT_ROAD_LANES,
     DEFAULT_ROAD_LENGTH_M,
     DEFAULT_ROAD_SATURATION_FLOW,
     DEFAULT_ROAD_SPEED_DESIGN_KMH,
 )
+
+from src.core.logger import logger
 
 MAX_NEIGHBORS = 4
 
@@ -971,4 +972,3 @@ def _json_dump(data: dict) -> str:
     import json
 
     return json.dumps(data, ensure_ascii=False, indent=2)
-

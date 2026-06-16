@@ -17,9 +17,6 @@ Khong load ONNX o day — runtime engine se load qua model_manager khi can.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
 from src.bundles import (
     ActivePointer,
     BundleValidationError,

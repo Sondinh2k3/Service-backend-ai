@@ -27,6 +27,16 @@ class StageInput(BaseModel):
         ge=0,
         description="Optional compact input. If duration is omitted, runtime derives duration = greenTime + yellow + redClear.",
     )
+    minGreen: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional per-stage minimum green time override in seconds.",
+    )
+    maxGreen: int | None = Field(
+        default=None,
+        ge=0,
+        description="Optional per-stage maximum green time override in seconds.",
+    )
 
     model_config = ConfigDict(extra="ignore")
 

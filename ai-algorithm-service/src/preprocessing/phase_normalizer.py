@@ -15,6 +15,7 @@ from typing import List, Optional
 
 import numpy as np
 
+from src.core.config import get_settings
 from src.preprocessing.intersection_registry import IntersectionConfig
 from src.schemas.common_schemas.cross import Cross
 
@@ -106,24 +107,33 @@ def map_stage_actions(
     return out
 
 
-def extract_green_time_ratios(cross: Cross) -> np.ndarray:
+def extract_green_time_ratios(
+    cross: Cross,
+    config: Optional[IntersectionConfig] = None,
+) -> np.ndarray:
     """
-    Feature phụ 8-dim: tỉ lệ green-time hiện tại / tổng green trong cycle,
-    đặt theo thứ tự stage thực (không map qua standard phase — đây là feature
-    mô tả phân phối thời gian, không cần FRAP alignment).
+    Feature phụ 8-dim: green-time hiện tại / max_green theo standard phase.
+
+    Training observation đặt ratio theo 8 FRAP standard phases. Phase không map
+    được hoặc không hợp lệ giữ 0.
     """
     ratios = np.zeros(NUM_STANDARD_PHASES, dtype=np.float32)
     if not cross.stages:
         return ratios
 
-    total_fixed = sum(s.yellow + s.redClear for s in cross.stages)
-    total_green = cross.cycle.cycleLength - total_fixed
-    if total_green <= 0:
-        return ratios
-
+    default_max_green = int(get_settings().runtime_max_green)
+    mapping = _effective_phase_mapping(cross, config)
     for i, stage in enumerate(cross.stages):
-        if i >= NUM_STANDARD_PHASES:
-            break
-        green_time = stage.duration - stage.yellow - stage.redClear
-        ratios[i] = max(0.0, green_time / total_green)
+        if i >= len(mapping):
+            continue
+        std_idx = mapping[i]
+        if not 0 <= std_idx < NUM_STANDARD_PHASES:
+            continue
+        green_time = stage.greenTime
+        if green_time is None and stage.duration is not None:
+            green_time = stage.duration - stage.yellow - stage.redClear
+        max_green = stage.maxGreen or cross.maxGreen or default_max_green
+        if max_green is None or max_green <= 0:
+            continue
+        ratios[std_idx] = np.clip(float(green_time or 0) / float(max_green), 0.0, 1.0)
     return ratios

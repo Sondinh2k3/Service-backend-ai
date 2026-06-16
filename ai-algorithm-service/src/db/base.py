@@ -44,8 +44,10 @@ SessionLocal = sessionmaker(
 
 def init_db() -> None:
     """Tao bang theo metadata (first-run) + ad-hoc migrations cho MVP."""
-    # Import models de dam bao registry duoc load truoc khi create_all.
-    from src.db import models  # noqa: F401
+    # Load models de dam bao SQLAlchemy registry co du metadata truoc create_all.
+    from importlib import import_module
+
+    import_module("src.db.models")
     from src.db.migrations import apply_simple_migrations, backfill_area_network_ids
 
     Base.metadata.create_all(bind=engine)

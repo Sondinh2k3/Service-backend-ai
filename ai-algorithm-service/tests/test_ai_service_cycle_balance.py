@@ -138,6 +138,8 @@ def test_hydrates_compact_runtime_payload_from_intersection_config(monkeypatch):
                         "old_id": "old-1",
                         "yellow": 3,
                         "red_clear": 1,
+                        "min_green_time": 15,
+                        "max_green_time": 90,
                     },
                     {
                         "id": 2,
@@ -145,6 +147,8 @@ def test_hydrates_compact_runtime_payload_from_intersection_config(monkeypatch):
                         "old_id": "old-2",
                         "yellow": 3,
                         "red_clear": 0,
+                        "min_green_time": 20,
+                        "max_green_time": 80,
                     },
                 ],
             }
@@ -188,5 +192,69 @@ def test_hydrates_compact_runtime_payload_from_intersection_config(monkeypatch):
     assert hydrated[0].cycle.cycleLength == 90
     assert hydrated[0].stages[0].duration == 45
     assert hydrated[0].stages[0].stageCode == "S1"
+    assert hydrated[0].stages[0].minGreen == 15
+    assert hydrated[0].stages[0].maxGreen == 90
     assert hydrated[0].stages[1].redClear == 0
+    assert hydrated[0].stages[1].minGreen == 20
+    assert hydrated[0].stages[1].maxGreen == 80
     assert hydrated[0].roads[0].saturationFlow == 1800
+
+
+def test_hydration_prefers_inference_green_bounds_over_static_db(monkeypatch):
+    cfg = IntersectionConfig(
+        cross_id=1001,
+        primary_cycle_id=10,
+        cycles={
+            "10": {
+                "cycle_length": 90,
+                "stage_to_standard_phase": {"1": 0, "2": 1},
+                "standard_phase_to_stage": {"0": 1, "1": 2},
+                "stages": [
+                    {"id": 1, "yellow": 3, "red_clear": 1, "min_green_time": 15, "max_green_time": 90},
+                    {"id": 2, "yellow": 3, "red_clear": 1, "min_green_time": 15, "max_green_time": 90},
+                ],
+            }
+        },
+    )
+    monkeypatch.setattr("src.services.ai_service.get_config", lambda area_id, cross_id: cfg)
+
+    ai_input = AIInput(
+        areaId=1,
+        crosses=[
+            {
+                "crossId": 1001,
+                "cycleId": 10,
+                "minGreen": 20,
+                "maxGreen": 80,
+                "stages": [
+                    {"stageId": 1, "greenTime": 41},
+                    {"stageId": 2, "greenTime": 42, "minGreen": 25, "maxGreen": 70},
+                ],
+                "roads": [
+                    {
+                        "roadId": 501,
+                        "averageSpeed": 30,
+                        "occupancySpace": 40,
+                    }
+                ],
+            }
+        ],
+    )
+
+    hydrated = AIService(ai_input)._hydrate_runtime_crosses(ai_input)[0]
+
+    assert hydrated.stages[0].minGreen == 20
+    assert hydrated.stages[0].maxGreen == 80
+    assert hydrated.stages[1].minGreen == 25
+    assert hydrated.stages[1].maxGreen == 70
+
+
+def test_signal_plan_uses_cross_level_green_bounds():
+    cross = _make_cross(cycle_length=90, red_clears=(1, 1), stage_duration=45)
+    cross.minGreen = 20
+    cross.maxGreen = 50
+
+    output = _run_plan(cross)
+
+    assert _duration_sum(output) == 90
+    assert all(20 <= p.greenTime <= 50 for p in output.phases)

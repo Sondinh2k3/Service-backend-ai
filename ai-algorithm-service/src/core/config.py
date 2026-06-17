@@ -66,7 +66,7 @@ class Settings(BaseSettings):
 
     # ----- Strict mode (plan 6.1.1)
     # Production: khong auto-generate config, thieu file la fail-fast.
-    ai_strict_mode: bool = False
+    ai_strict_mode: bool = True
     # Giai han 1 area/request (plan 6.1.5). Khi tat, cho phep nhieu area mot request.
     enforce_single_area_per_request: bool = True
 

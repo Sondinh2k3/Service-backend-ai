@@ -68,11 +68,37 @@ SERVICE_ROLE=ops
 RUNTIME_INTERNAL_URL=http://ai-runtime:8000
 ```
 
-## 5. Customer setup
+## 5. Build offline image tar
+
+Build context must be the repository root because the image includes the
+service plus the two sibling local packages.
+
+```bash
+cd Service-backend-ai
+docker build \
+  -f ai-algorithm-service/Dockerfile \
+  -t ai-algorithm-service:2.2.0 \
+  .
+docker save -o ai-algorithm-service_2.2.0.tar ai-algorithm-service:2.2.0
+gzip -9 ai-algorithm-service_2.2.0.tar
+```
+
+Customer edge load:
+
+```bash
+gunzip -c ai-algorithm-service_2.2.0.tar.gz | docker load
+```
+
+Both `ai-runtime` and `ai-ops` use the same image; they differ by environment
+variables such as `SERVICE_ROLE`.
+
+## 6. Customer setup
 
 ```bash
 cd ai-algorithm-service
-docker compose up -d
+cp .env.production.example .env.production
+# Edit .env.production with customer DB/MinIO/API credentials.
+docker compose -f docker-compose.production.yml up -d
 
 curl http://localhost:8001/health
 curl http://localhost:8001/ready
@@ -80,7 +106,7 @@ curl -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
   http://localhost:8002/ops/auto-sync/status
 ```
 
-## 6. Go-live sequence
+## 7. Go-live sequence
 
 1. Start edge services.
 2. Sync area metadata.
@@ -97,7 +123,7 @@ Do not go live if `AUTO_CROSS_MAPPING_BY_ORDER` appears in the report.
 
 After snapshot sync, verify that `models/real_normalization/area_<area_id>/` is generated and contains `network.json` plus per-cross configs. Runtime compact inference depends on this static metadata.
 
-## 7. Real topology and mapping
+## 8. Real topology and mapping
 
 Backend export from DB:
 
@@ -112,7 +138,7 @@ Backend export from DB:
 
 Snapshot should include cycle/stage/road static metadata used at runtime: `cycle_length`, stage `yellow/red_clear`, lanes, length, speed, capacity, and enough GPS/direction information to build `direction_map`.
 
-## 8. Rollback
+## 9. Rollback
 
 ```bash
 curl -X POST \
@@ -124,7 +150,7 @@ curl -X POST \
 
 Core Controller must keep fixed-time fallback independent of rollback.
 
-## 9. Operational checklist
+## 10. Operational checklist
 
 - Strong internal API key.
 - Persistent model/data volumes.
@@ -134,7 +160,7 @@ Core Controller must keep fixed-time fallback independent of rollback.
 - Alerts for readiness false, fallback rate, latency, drift, guardrail violations.
 - Manual activation in production.
 
-## 10. References
+## 11. References
 
 - [configuration.md](configuration.md)
 - [auto-sync.md](auto-sync.md)

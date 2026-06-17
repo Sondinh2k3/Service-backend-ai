@@ -103,7 +103,7 @@ services:
       LOG_LEVEL: INFO
       MODEL_DIR: /app/models
       SERVICE_ROLE: runtime
-      AI_STRICT_MODE: "false"
+      AI_STRICT_MODE: "true"
       BUNDLE_LAYOUT_ENABLED: "true"
       MINIO_ENABLED: "true"
       MINIO_ENDPOINT: http://minio:9000

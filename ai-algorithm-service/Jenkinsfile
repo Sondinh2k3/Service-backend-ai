@@ -74,9 +74,13 @@ pipeline {
         stage('Test') {
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:test --target builder .
+                    docker build \
+                        -f ai-algorithm-service/Dockerfile \
+                        -t ${IMAGE_NAME}:test \
+                        --target builder \
+                        .
                     docker run --rm \
-                        -v ${WORKSPACE}/tests:/app/tests:ro \
+                        -v ${WORKSPACE}/ai-algorithm-service/tests:/app/tests:ro \
                         ${IMAGE_NAME}:test \
                         uv run --extra dev pytest tests/ -v --maxfail=1 --disable-warnings
                 '''
@@ -91,7 +95,13 @@ pipeline {
 
         stage('Build Image') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${SHORT_SHA} -t ${IMAGE_NAME}:latest .'
+                sh '''
+                    docker build \
+                        -f ai-algorithm-service/Dockerfile \
+                        -t ${IMAGE_NAME}:${SHORT_SHA} \
+                        -t ${IMAGE_NAME}:latest \
+                        .
+                '''
             }
         }
 
